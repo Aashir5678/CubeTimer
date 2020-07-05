@@ -41,25 +41,14 @@ class CubeTimer:
         self.Displaytimevar = tk.IntVar()
 
         # Create connection to database and create table
-        self.conn = sqlite3.connect("Solves\\solves.db")
+        self.conn = sqlite3.connect("Timer\\solves.db")
         self.c = self.conn.cursor()
-        self.c.execute("DROP TABLE settings")
 
         try:
             self.c.execute("""CREATE TABLE times (
                             time float,
                             scramble text,
                             date text
-                            )""")
-
-        except sqlite3.OperationalError:
-            pass
-
-        try:
-            self.c.execute("""CREATE TABLE settings (
-                            inspection int,
-                            display_time int,
-                            scramble_len int
                             )""")
 
         except sqlite3.OperationalError:
@@ -77,26 +66,26 @@ class CubeTimer:
             date = datetime.datetime.strptime(date, "%Y-%m-%d-%I:%M %p")
             self.times.append(Time(time, scramble, date))
 
-        # Check if inspection is enabled and set scramble length
-
-        print (self.get_settings())
-        if self.get_settings():
-            self.Inspectionvar.set(self.get_settings()[0][0])
-            self.scramble_len = int(self.get_settings()[0][1])
-            self.Displaytimevar.set(self.get_settings()[0][2])
-            self.display_time = (True if int(self.get_settings()[0][2]) else False)
-
-        else:
-            self.Inspectionvar.set(0)
-            self.Displaytimevar.set(1)
-            self.display_time = True
-            with self.conn:
-                self.c.execute("INSERT INTO settings VALUES (?, ?, ?)", (self.Inspectionvar.get(),
-                                                                         self.Displaytimevar.get(),
-                                                                         self.scramble_len))
-
         frame = tk.Frame(self.parent)
-        print (self.display_time)
+
+        # Get scramble length, inspection and display time values
+
+        conn = sqlite3.connect("Timer\\settings.db")
+        cursor = conn.cursor()
+        try:
+            settings = self.get_settings(cursor)
+            if settings:
+                self.Inspectionvar.set(settings[0][0])
+                self.Displaytimevar.set(settings[0][1])
+                self.display_time = (True if self.Displaytimevar.get() else False)
+                self.scramble_len = settings[0][2]
+
+        except sqlite3.OperationalError:
+            pass
+
+        finally:
+            conn.close()
+
         # Setup Listbox
         self.TimesScrollbar = tk.Scrollbar(self.parent)
         if len(self.times) == 0:
@@ -277,7 +266,7 @@ class CubeTimer:
             if parent is not None:
                 parent.destroy()
 
-    def get_time(self, time):
+    def get_time(self, time) -> list:
         """
         Returns the times time, scramble and date
         :param time: float
@@ -286,10 +275,14 @@ class CubeTimer:
         self.c.execute("SELECT * FROM times WHERE time=:time", {"time": time})
         return self.c.fetchmany(3)
 
-    def get_settings(self):
-        """Returns the current user settings"""
-        self.c.execute("SELECT * FROM settings WHERE inspection=:inspection", {"inspection": self.Inspectionvar.get()})
-        return self.c.
+    def get_settings(self, cursor) -> list:
+        """
+        Returns the current user settings
+        :param cursor: conn.cursor()
+        :return: list
+        """
+        cursor.execute("SELECT * FROM settings")
+        return cursor.fetchmany(3)
 
     def get_scramble(self) -> str:
         """
@@ -362,7 +355,10 @@ class CubeTimer:
             self.InspectionLabel.after(1000, lambda: self.start_timer())
 
     def space_hold(self, recursive=False):
-        """Bound to space down"""
+        """
+        Bound to space down
+        :param recursive: bool
+        """
         # Unbind space and space release
         self.parent.unbind("<space>")
         self.parent.unbind("<KeyRelease-space>")
@@ -498,6 +494,40 @@ class CubeTimer:
         self.Settings.resizable(False, False)
         self.Settings.title("Settings")
 
+        # Connect to database
+
+        conn = sqlite3.connect("Timer\\settings.db")
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("""CREATE TABLE settings (
+                                    inspection integer,
+                                    display_time integer,
+                                    scramble_len integer
+                                    )""")
+
+        except sqlite3.OperationalError:
+            pass
+
+        # Check if inspection is enabled and set scramble length
+
+        if self.get_settings(cursor):
+            self.Inspectionvar.set(self.get_settings(cursor)[0][0])
+            self.Displaytimevar.set(self.get_settings(cursor)[0][1])
+            self.scramble_len = int(self.get_settings(cursor)[0][2])
+
+            self.display_time = (True if int(self.get_settings(cursor)[0][1]) else False)
+
+        else:
+            self.Inspectionvar.set(0)
+            self.Displaytimevar.set(1)
+            self.display_time = True
+            with conn:
+                cursor.execute("DELETE FROM settings")
+                cursor.execute("INSERT INTO settings VALUES (:inspection, :display_time, :scramble_len)",
+                               {"inspection": self.Inspectionvar.get(), "display_time": self.Displaytimevar.get(),
+                                "scramble_len": self.scramble_len})
+
         # Setting widgets
         SettingFont = font.Font(size=10, weight="bold")
         SettingsLabel = tk.Label(self.Settings, text="Settings", font=SettingFont)
@@ -525,12 +555,11 @@ class CubeTimer:
         ScrambleEntry.insert(0, self.scramble_len)
 
         # Bindings
-
-        ScrambleEntry.bind("<Return>", lambda event: self.change_scramble_len(ScrambleEntry))
+        ScrambleEntry.bind("<Return>", lambda event: self.change_scramble_len(conn, cursor, ScrambleEntry))
         CopyTimesButton.bind("<Button-1>", lambda event: self.copy_times(CopyTimesButton))
-        self.InspectionCheckbutton.bind("<Button-1>", lambda event: self.save_setting())
-        self.DisplayTimeCheckbutton.bind("<Button-1>", lambda event: self.save_setting(setting="display time"))
-        self.Settings.protocol("WM_DELETE_WINDOW", lambda: self.change_scramble_len(ScrambleEntry, quit_window=True))
+        self.InspectionCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor))
+        self.DisplayTimeCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor, setting="display time"))
+        self.Settings.protocol("WM_DELETE_WINDOW", lambda: self.change_scramble_len(conn, cursor, ScrambleEntry, quit_window=True))
 
         # Widget placement
         SettingsLabel.pack()
@@ -542,9 +571,11 @@ class CubeTimer:
         CopyTimesButton.pack()
         GenerateScrambleButton.pack()
 
-    def change_scramble_len(self, entry, quit_window=False):
+    def change_scramble_len(self, conn, cursor, entry, quit_window=False):
         """
         Gets the int from the entry provided and sets it to the new scramble length
+        :param conn: sqlite3.connect(db)
+        :param cursor: conn.cursor
         :param entry: tkinter.Entry
         :param quit_window: bool
         """
@@ -569,12 +600,16 @@ class CubeTimer:
             self.parent.update()
             self.ScrambleText.config(state=tk.DISABLED)
 
-        self.save_setting(entry)
+        self.save_setting(conn, cursor, setting=entry)
         if quit_window:
+            conn.close()
             self.Settings.destroy()
 
     def copy_times(self, button):
-        """Copies all the times to clipboard, each time is seperated by a comma"""
+        """
+        Copies all the times to clipboard, each time is seperated by a comma
+        :param button: tkinter.Button
+        """
         to_copy = ""
         max_found = False
         min_found = False
@@ -627,11 +662,13 @@ class CubeTimer:
         self.ScrambleText.config(state=tk.DISABLED)
         self.parent.update()
 
-    def save_setting(self, setting="inspection"):
+    def save_setting(self, conn, cursor, setting="inspection"):
         """
         Saves the setting, 'setting', by default, saving value of Inspectionvar, if the setting is of instance
         tkinter.Entry, then save the scramble length, which is fetched by the entry provided
-        :param: setting str or tkinter.Entry
+        :param conn: sqlite3.connect(db)
+        :param cursor: conn.cursor()
+        :param setting: str or tkinter.Entry
         """
         if setting == "inspection":
             if self.Inspectionvar.get():
@@ -641,8 +678,8 @@ class CubeTimer:
                 self.Inspectionvar.set(1)
 
             inspection = self.Inspectionvar.get()
-            with self.conn:
-                self.c.execute("UPDATE settings SET inspection = :inspection WHERE scramble_len = :length", {"inspection": inspection, "length": self.scramble_len})
+            with conn:
+                cursor.execute("UPDATE settings SET inspection = :inspection WHERE display_time = :display_time", {"inspection": inspection, "display_time": int(self.display_time)})
 
         elif setting == "display time":
             if self.Displaytimevar.get():
@@ -654,14 +691,13 @@ class CubeTimer:
                 self.display_time = True
 
             display_time = self.Displaytimevar.get()
-            print (self.display_time)
 
-            with self.conn:
-                self.c.execute("UPDATE settings SET display_time= :display_time WHERE scramble_len = :length", {"display_time": display_time, "length": self.scramble_len})
+            with conn:
+                cursor.execute("UPDATE settings SET display_time= :display_time WHERE scramble_len = :length", {"display_time": display_time, "length": self.scramble_len})
 
         elif isinstance(setting, tk.Entry):
-            with self.conn:
-                self.c.execute("UPDATE settings SET scramble_len=:length WHERE inspection=:inspection", {"length": self.scramble_len, "inspection": self.Inspectionvar.get()})
+            with conn:
+                cursor.execute("UPDATE settings SET scramble_len=:length WHERE inspection=:inspection", {"length": self.scramble_len, "inspection": self.Inspectionvar.get()})
 
     def update_timer(self):
         """Updates the timer every 100 miliseconds"""
