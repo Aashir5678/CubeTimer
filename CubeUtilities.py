@@ -21,9 +21,32 @@ class CubeUtils:
         scramble = []
 
         for letter_index in range(cls.SCRAMBLE_LEN):
-            # Generate a random letter notation
+            # Generate a random letter
             letter = random.choice(cls.LETTERS)
-            if letter_index != 0:
+            if letter_index >= 2:
+                if (
+                    scramble[letter_index - 2].replace("'", "").replace("2", "")
+                    == letter
+                ):
+                    # Make a copy of list without duplicate move and chose letter from that list
+                    letters = cls.LETTERS.copy()
+
+                    letters.remove(letter)
+
+                    letter = random.choice(letters)
+
+                if (
+                    scramble[letter_index - 1].replace("'", "").replace("2", "")
+                    == letter
+                ):
+                    # Make a copy of list without duplicate move and chose letter from that list
+                    letters = cls.LETTERS.copy()
+
+                    letters.remove(letter)
+
+                    letter = random.choice(letters)
+
+            elif letter_index == 1:
                 # Check if previous move is the same as the current move
 
                 if (
@@ -42,9 +65,9 @@ class CubeUtils:
 
             if qualifier:
                 letter += random.choice(cls.QUALIFIERS)
-            scramble.append(letter)
 
-        # scramble[-1] = scramble[-1].replace("\n", "")
+            # Add the move to the scramble
+            scramble.append(letter)
 
         return scramble
 
@@ -70,7 +93,7 @@ class CubeUtils:
     def validate(cls, scramble) -> bool:
         """
         Returns True if scramble is valid, else, returns False
-        :param list scramble:
+        :param scramble: list
         :return: bool
         """
         prev_move = scramble[0]
@@ -81,6 +104,30 @@ class CubeUtils:
             prev_move = move
 
         return True
+
+    @classmethod
+    def check_for_pattern(cls, scramble) -> bool:
+        """
+        Checks scramble for any patterns, Returns True if there is a pattern
+        :param scramble: list
+        :return: boolean
+        """
+        prev_move = scramble[0]
+        move = scramble[2]
+        if prev_move == move:
+            return False
+        for move in scramble[2: -1]:
+            prev_move = scramble[scramble.index(move) - 1]
+            try:
+                preceding = scramble[scramble.index(move) + 1]
+
+            except IndexError:
+                return False
+
+            if prev_move == preceding:
+                return True
+
+        return False
 
     @staticmethod
     def get_average(times, ao=-1) -> float:
@@ -152,19 +199,5 @@ class Time:
 
 
 if __name__ == "__main__":
-
-    for i in range(100):
-        scramble = CubeUtils.generate_scramble()
-        valid = CubeUtils.validate(scramble)
-
-        if valid:
-            print ("Valid")
-            print (scramble)
-
-        else:
-            print ("Invalid")
-            print (scramble)
-
-    scramble = "B2 R' R' " + " ".join(CubeUtils.generate_scramble(10))
-    print (CubeUtils.validate(scramble.split(" ")))
+    print (" ".join(CubeUtils.generate_scramble(25)))
 
