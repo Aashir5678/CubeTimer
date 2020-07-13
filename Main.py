@@ -7,7 +7,9 @@ import tkinter.font as font
 from pyperclip import copy
 from pygame import mixer
 from tkinter import messagebox
+from _tkinter import TclError
 from CubeUtilities import CubeUtils, Time
+from PIL import ImageTk, Image
 from os import getcwd, chdir
 
 
@@ -24,9 +26,11 @@ class CubeTimer:
         self.parent.title("Cube Timer")
         self.parent.iconbitmap("Assets\\cube.ico")  # Icon made by Freepik from www.flaticon.com
         self.parent.config(background="light green")
+        self.fullscreen = False
         self.timer_is_running = False
         self.space_held = False
         self.display_time = False
+        self.DNF = False
         self.plus_2 = False
         self.scramble = None
         self.times = []
@@ -48,6 +52,7 @@ class CubeTimer:
             self.c.execute("""CREATE TABLE times (
                             time float,
                             scramble text,
+                            
                             date text
                             )""")
 
@@ -101,7 +106,11 @@ class CubeTimer:
 
             self.TimesListbox.config(height=len(self.times))
             for time in self.times:
-                self.TimesListbox.insert(tk.END, time.time)
+                if not time.DNF:
+                    self.TimesListbox.insert(tk.END, time.time)
+
+                else:
+                    self.TimesListbox.insert(tk.END, "DNF")
 
         self.TimesListbox.config(width=10)
 
@@ -158,7 +167,8 @@ class CubeTimer:
         self.averagefont = font.Font(size=15, weight="bold")
 
         # Images
-        gear = tk.PhotoImage(file="Assets/gear.png")  # Icon made by Pixel perfect from www.flaticon.com
+        gear_image = Image.open("Assets\gear.png") # Icon made by Pixel perfect from www.flaticon.com
+        gear_image = ImageTk.PhotoImage(gear_image)
 
         # Tkinter widgets
         self.InspectionLabel = tk.Label(self.parent, text=self.INSPECTION_COUNT, font=self.timefont, bg="red")
@@ -171,9 +181,10 @@ class CubeTimer:
             frame, height=1, width=200, font=self.scramblefont, bg="brown",
         )
 
-        self.SettingsButton = tk.Button(self.parent, image=gear, bg="light green", relief=tk.FLAT,
-                                        command=lambda: self.open_settings())
-        self.SettingsButton.image = gear
+        self.SettingsButton = tk.Button(self.parent, image=gear_image, bg="light green", relief=tk.FLAT,
+                                        command=lambda: self.open_settings(), height=60, width=60)
+
+        self.SettingsButton.image = gear_image
         self.AveragesLabel = tk.Label(self.parent, font=self.averagefont)
 
         self.update_stats(times)
@@ -191,7 +202,13 @@ class CubeTimer:
         )
         )
                                )
+
+        self.SettingsButton.bind("<Enter>", lambda event: self.enlarge_settings_button())
+        self.SettingsButton.bind("<Leave>", lambda event: self.reduce_settings_button())
         self.parent.protocol("WM_DELETE_WINDOW", lambda: self.quit())
+
+        self.parent.bind("<F11>", lambda event: self.toggle_fullscreen())
+        self.parent.bind("<Escape>", lambda event: self.exit_fullscreen())
 
         self.parent.bind(
             "<space>", lambda event: self.space_hold(),
@@ -314,7 +331,11 @@ class CubeTimer:
             # Start Timer
             self.space_held = False
             self.timer_is_running = True
-            self.TimeLabel.config(text="0.00")
+            if self.display_time:
+                self.TimeLabel.config(text="0.00")
+
+            else:
+                self.TimeLabel.config(text="...")
             self.start = t.time()
             self.update_timer()
 
@@ -342,6 +363,7 @@ class CubeTimer:
 
                 else:
                     difference = "DNF"
+                    self.DNF = True
 
             elif difference == 8 or difference == 4:
                 mixer.music.play()
@@ -391,6 +413,13 @@ class CubeTimer:
             self.timer_is_running = False
             self.end = t.time()
 
+            if not self.display_time:
+                self.display_time = True
+                self.timer_is_running = True
+                self.update_timer(recursive=False)
+                self.display_time = False
+                self.timer_is_running = False
+
             # Change bg
             self.TimeLabel.config(bg="red")
             self.AveragesLabel.config(bg="red")
@@ -415,11 +444,15 @@ class CubeTimer:
 
             # Add time to listbox
             self.TimesListbox.config(height=len(self.times) + 1)
-            if not self.plus_2:
+            if not self.plus_2 and not self.DNF:
                 self.TimesListbox.insert(tk.END, self.TimeLabel["text"])
 
-            else:
+            elif self.plus_2:
                 self.TimesListbox.insert(tk.END, float(self.TimeLabel["text"]) + 2)
+
+            else:
+                self.TimesListbox.insert(tk.END, self.TimeLabel["text"])
+                print ("DNF")
 
             if len(self.times) >= 58:
                 self.TimesScrollbar.grid(row=0, column=2, sticky=tk.N + tk.S)
@@ -438,6 +471,8 @@ class CubeTimer:
             else:
                 time = Time(float(self.TimeLabel["text"]) + 2, self.scramble, time_date)
 
+            self.plus_2 = False
+            self.DNF = False
             self.save_time(time)
 
             # Update stats
@@ -559,7 +594,12 @@ class CubeTimer:
         CopyTimesButton.bind("<Button-1>", lambda event: self.copy_times(CopyTimesButton))
         self.InspectionCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor))
         self.DisplayTimeCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor, setting="display time"))
-        self.Settings.protocol("WM_DELETE_WINDOW", lambda: self.change_scramble_len(conn, cursor, ScrambleEntry, quit_window=True))
+        try:
+            self.Settings.protocol("WM_DELETE_WINDOW",
+                                   lambda: self.change_scramble_len(conn, cursor, ScrambleEntry, quit_window=True))
+
+        except TclError:
+            self.Settings.quit()
 
         # Widget placement
         SettingsLabel.pack()
@@ -653,6 +693,10 @@ class CubeTimer:
             with self.conn:
                 self.c.execute("DELETE FROM times")
 
+            self.update_stats(self.TimesListbox.get(0, tk.END))
+
+            self.TimeLabel.config(text="0.00")
+
     def insert_scramble(self):
         """Generates a scramble and inserts it to ScrambleText"""
         self.ScrambleText.config(state=tk.NORMAL)
@@ -661,6 +705,22 @@ class CubeTimer:
         self.ScrambleText.insert("0.0", scramble)
         self.ScrambleText.config(state=tk.DISABLED)
         self.parent.update()
+
+    def enlarge_settings_button(self):
+        """Enlarges the settings button, bound to mouse hover"""
+        image = Image.open("Assets\\gear.png")
+        image = image.resize((66, 66), Image.ANTIALIAS)
+        image = ImageTk.PhotoImage(image)
+        self.SettingsButton.config(image=image)
+        self.SettingsButton.image = image
+
+    def reduce_settings_button(self):
+        """Reduces the settings button to its default size"""
+        image = Image.open("Assets\\gear.png")
+        image = image.resize((60, 60), Image.ANTIALIAS)
+        image = ImageTk.PhotoImage(image)
+        self.SettingsButton.config(image=image)
+        self.SettingsButton.image = image
 
     def save_setting(self, conn, cursor, setting="inspection"):
         """
@@ -699,8 +759,11 @@ class CubeTimer:
             with conn:
                 cursor.execute("UPDATE settings SET scramble_len=:length WHERE inspection=:inspection", {"length": self.scramble_len, "inspection": self.Inspectionvar.get()})
 
-    def update_timer(self):
-        """Updates the timer every 100 miliseconds"""
+    def update_timer(self, recursive=True):
+        """
+        Updates the timer every 100 miliseconds
+        :param recursive: bool
+        """
         self.mean = "N/A"
         self.ao5 = "N/A"
         self.ao12 = "N/A"
@@ -733,7 +796,6 @@ class CubeTimer:
             # Checks if diff is greater than or equal to 10
             elif round(diff) >= 10:
                 diff = str(diff)
-
                 diff = diff[0:4] + diff[4]
 
             # Checks if diff is smaller then ten
@@ -745,13 +807,18 @@ class CubeTimer:
                 except IndexError:
                     diff = diff[0:2] + diff[2]
 
-            self.TimeLabel.config(text=diff)
+            if self.display_time:
+                self.TimeLabel.config(text=diff)
 
         # Calls it self every 100 miliseconds
-        self.TimeLabel.after(100, lambda: self.update_timer())
+        if recursive:
+            self.TimeLabel.after(100, lambda: self.update_timer())
 
     def update_stats(self, times):
-        """Calculate and display ao5, ao12, ao100, mean, best and worst time"""
+        """
+        Calculate and display ao5, ao12, ao100, mean, best and worst time
+        :param times: string list
+        """
         # Convert to float array
         for time in range(len(times)):
             times[time] = float(times[time])
@@ -762,13 +829,13 @@ class CubeTimer:
             self.best_time = CubeUtils.get_best_time(times)
 
         except ValueError:
-            pass
+            self.best_time = "N/A"
 
         try:
             self.worst_time = CubeUtils.get_worst_time(times)
 
         except ValueError:
-            pass
+            self.worst_time = "N/A"
 
         # Get mean, ao5, ao12 and ao100
         if len(self.times) >= 100:
@@ -802,6 +869,16 @@ class CubeTimer:
             bg="light green",
             font=self.averagefont,
         )
+
+    def toggle_fullscreen(self):
+        """Puts the window in fullscreen"""
+        self.fullscreen = not self.fullscreen
+        self.parent.attributes("-fullscreen", self.fullscreen)
+
+    def exit_fullscreen(self):
+        """Exits fullscreen"""
+        self.fullscreen = False
+        self.parent.attributes("-fullscreen", False)
 
     def quit(self):
         """Quits the window and any other opened windows"""
