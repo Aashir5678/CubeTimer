@@ -75,19 +75,47 @@ class CubeUtils:
     def get_best_time(cls, times) -> int:
         """
         Returns the best time
-        :param list times: a list of times
+        :param times: list
         :returns: int
         """
-        return min(times)
+        if cls.find_DNFs(times):
+            return "DNF"
+
+        elif "DNF" in times:
+            times_ = times.copy()
+            times_.remove("DNF")
+            return min(times_)
+
+        else:
+            return min(times)
 
     @classmethod
     def get_worst_time(cls, times) -> int:
         """
         Returns the worst time
-        :param list times: a list of times
+        :param times: list
         :returns: int
         """
+        if "DNF" in times:
+            return "DNF"
         return max(times)
+
+    @classmethod
+    def find_DNFs(cls, times):
+        """
+        Returns True if there is times contains more than one DNF
+        :param times: list
+        :returns: bool
+        """
+        DNFS = {}
+        for time in times:
+            if time == "DNF" and len(DNFS) == 1:
+                return True
+
+            elif "DNF" in times:
+                DNFS["DNF"] = True
+
+        return False
 
     @classmethod
     def validate(cls, scramble) -> bool:
@@ -98,6 +126,7 @@ class CubeUtils:
         """
         prev_move = scramble[0]
         for move in scramble[1: -1]:
+            # Check if previous move is equal to current move
             if move == prev_move:
                 return False
 
@@ -124,17 +153,18 @@ class CubeUtils:
             except IndexError:
                 return False
 
+            # Check if previous and preceding move are the same
             if prev_move == preceding:
                 return True
 
         return False
 
-    @staticmethod
-    def get_average(times, ao=-1) -> float:
+    @classmethod
+    def get_average(cls, times, ao=-1) -> float:
         """
-        Returns average of times depending on ao parameter
-        :param list times: A list of times
-        :param int ao: defaults to -1 (the whole list)
+        Returns average of times depending on ao parameter, defaulting to the whole list
+        :param times: list
+        :param ao: int
         :return: float
         """
         if len(times) == 0:
@@ -142,6 +172,9 @@ class CubeUtils:
 
         elif len(times) == 1:
             return times[0]
+
+        if cls.find_DNFs(times):
+            return "DNF"
 
         if ao == 12 and len(times) != 12:
             times_ = times[-12:-1]
@@ -159,25 +192,29 @@ class CubeUtils:
             times_ = times.copy()
 
         if ao != -1:
-            times_.remove(max(times_))
-            times_.remove(min(times_))
+            times_.remove(cls.get_best_time(times_))
+            times_.remove(cls.get_worst_time(times_))
+
+        elif ao == -1 and "DNF" in times_:
+            return "DNF"
 
         for time in range(len(times_)):
             times_[time] = float(times_[time])
 
         try:
-            return round(float(sum(times_)) / float(len(times_)), 2)
+            return round(float(sum(times_)) / len(times_), 2)
 
         except ZeroDivisionError:
             return 0.0
 
 
 class Time:
-    def __init__(self, time, scramble, date):
+    def __init__(self, time, scramble, date, DNF=False):
         """
         :param time: float
         :param scramble: str
         :param date: datetime.datetime
+        :param DNF; bool
         """
         if not isinstance(date, datetime.datetime):
             raise TypeError("date parameter must be of type datetime.datetime")
@@ -185,6 +222,7 @@ class Time:
         self.time = time
         self.scramble = scramble
         self.date = datetime.datetime.strftime(date, "%Y-%m-%d-%I:%M %p")
+        self.DNF = DNF
 
     def get_date(self, format="%Y-%m-%d-%I:%M %p"):
         """
