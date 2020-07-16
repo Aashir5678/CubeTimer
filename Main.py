@@ -33,9 +33,11 @@ class CubeTimer:
         self.DNF = False
         self.plus_2 = False
         self.scramble = None
+        self.Settings = None
         self.times = []
         self.scramble_len = 25
         self.INSPECTION_COUNT = 16
+        self.DATE_FORMAT = "%Y-%m-%d-%I:%M %p"
         self.best_time = 0
         self.worst_time = 0
         self.start = 0
@@ -52,8 +54,8 @@ class CubeTimer:
             self.c.execute("""CREATE TABLE times (
                             time float,
                             scramble text,
-                            
-                            date text
+                            date text,
+                            DNF integer
                             )""")
 
         except sqlite3.OperationalError:
@@ -64,12 +66,16 @@ class CubeTimer:
         mixer.music.load("Assets/beep.wav")
 
         # Get times
-        self.c.execute("SELECT time, scramble, date FROM times")
+        self.c.execute("SELECT time, scramble, date, DNF FROM times")
 
         for times in self.c.fetchall():
-            time, scramble, date = times
-            date = datetime.datetime.strptime(date, "%Y-%m-%d-%I:%M %p")
-            self.times.append(Time(time, scramble, date))
+            time, scramble, date, DNF = times
+            date = datetime.datetime.strptime(date, self.DATE_FORMAT)
+            if DNF:
+                self.times.append(Time(time, scramble, date, DNF=True))
+
+            else:
+                self.times.append(Time(time, scramble, date))
 
         frame = tk.Frame(self.parent)
 
@@ -105,9 +111,15 @@ class CubeTimer:
                 self.TimesListbox = tk.Listbox(self.parent, height=5)
 
             self.TimesListbox.config(height=len(self.times))
+
+            # Insert times in to Listbox
             for time in self.times:
                 if not time.DNF:
-                    self.TimesListbox.insert(tk.END, time.time)
+                    if 59 < time.time:
+                        self.TimesListbox.insert(tk.END, Time.convert_minutes(time.time))
+
+                    else:
+                        self.TimesListbox.insert(tk.END, time.time)
 
                 else:
                     self.TimesListbox.insert(tk.END, "DNF")
@@ -127,7 +139,11 @@ class CubeTimer:
         try:
             times_ = []
             for time in self.times:
-                times_.append(time.time)
+                if not time.DNF:
+                    times_.append(time.time)
+
+                else:
+                    times_.append("DNF")
             self.best_time = CubeUtils.get_best_time(times_)
 
         except ValueError:
@@ -136,7 +152,11 @@ class CubeTimer:
         try:
             times_ = []
             for time in self.times:
-                times_.append(time.time)
+                if not time.DNF:
+                    times_.append(time.time)
+
+                else:
+                    times_.append("DNF")
             self.worst_time = CubeUtils.get_worst_time(times_)
 
         except ValueError:
@@ -197,15 +217,18 @@ class CubeTimer:
             "<Double-Button-1>", lambda item: self.time_options()
         )
 
-        self.TimesListbox.bind("<Delete>", lambda item: self.delete_time(float(self.TimesListbox.get(
+        self.TimesListbox.bind("<Delete>", lambda item: self.delete_time(self.TimesListbox.get(
             list(self.TimesListbox.curselection()))
         )
         )
-                               )
 
         self.SettingsButton.bind("<Enter>", lambda event: self.enlarge_settings_button())
         self.SettingsButton.bind("<Leave>", lambda event: self.reduce_settings_button())
-        self.parent.protocol("WM_DELETE_WINDOW", lambda: self.quit())
+        try:
+            self.parent.protocol("WM_DELETE_WINDOW", lambda: self.quit())
+
+        except TclError:
+            pass
 
         self.parent.bind("<F11>", lambda event: self.toggle_fullscreen())
         self.parent.bind("<Escape>", lambda event: self.exit_fullscreen())
@@ -243,25 +266,61 @@ class CubeTimer:
         """
         self.times.append(time)
         with self.conn:
-            self.c.execute("INSERT INTO times VALUES (?, ?, ?)", (time.time, time.scramble, time.date))
+            self.c.execute("INSERT INTO times VALUES (?, ?, ?, ?)", (time.time, time.scramble, time.date, int(time.DNF)))
 
-    def delete_time(self, time, parent=None):
+    def delete_time(self, time, parent=None, confirm=True):
         """
-        Deletes the time from the list and the database
-        :param time: CubeUtilities.Time
+        Deletes the time from the list and the database, if confirm then ask to delete time before deleting it,
+        if parent is not None then it destroys the parent after deleting the time
+        :param time: CubeUtilities.Time / float
         :param parent: tkinter.Tk()
+        :param confirm: bool
         """
-        delete_time = tk.messagebox.askyesno("Delete time ?", "Are you sure you want to delete this time ?")
+        if confirm:
+            delete_time = tk.messagebox.askyesno("Delete time ?", "Are you sure you want to delete this time ?")
+
+        else:
+            delete_time = True
+
         if delete_time:
-            time = self.get_time(time)
-            time = Time(time[0][0], time[0][1], datetime.datetime.strptime(time[0][2], "%Y-%m-%d-%I:%M %p"))
+            if time != "DNF":
+                try:
+                    time = self.get_time(float(time))
+
+                except ValueError:
+                    time = self.get_time(float(Time.convert_seconds(time)))
+
+                except TypeError:
+                    time = self.get_time(time.time)
+
+                time = Time(time[0][0], time[0][1], datetime.datetime.strptime(time[0][2], self.DATE_FORMAT))
+
+            else:
+                index = self.TimesListbox.curselection()[0] - 1
+                self.c.execute("SELECT * FROM times WHERE DNF=:DNF", {"DNF": 1})
+                DNF_times = list(self.c.fetchall())
+                for time in range(len(DNF_times)):
+                    try:
+                        time_info = list(DNF_times)[index]
+
+                    except IndexError:
+                        time_info = list(DNF_times)[-1]
+
+                    finally:
+                        break
+
+                else:
+                    return
+
+                time = Time(time_info[0], time_info[1], datetime.datetime.strptime(time_info[2], self.DATE_FORMAT), DNF=True)
+
             for time_ in self.times:
-                if time_.time == time.time and time_.scramble == time.scramble and time_.date == time.date:
+                if time_.time == time.time and time_.scramble == time.scramble and time_.date == time.date and time_.DNF == time.DNF:
                     self.times.remove(time_)
                     break
 
             else:
-                tk.messagebox.showerror("Non=existant time", f"The time '{time.time}' does not exist")
+                tk.messagebox.showerror("Non-existant time", f"The time '{time.time}' does not exist")
                 return
 
             with self.conn:
@@ -277,7 +336,15 @@ class CubeTimer:
                 self.TimesListbox.config(height=5)
 
             for time in self.times:
-                self.TimesListbox.insert(tk.END, time.time)
+                if not time.DNF:
+                    if time.time > 59:
+                        self.TimesListbox.insert(tk.END, Time.convert_minutes(time.time))
+
+                    else:
+                        self.TimesListbox.insert(tk.END, time.time)
+
+                else:
+                    self.TimesListbox.insert(tk.END, "DNF")
 
             self.update_stats(list(self.TimesListbox.get(0, tk.END)))
             if parent is not None:
@@ -290,7 +357,7 @@ class CubeTimer:
         :return: list
         """
         self.c.execute("SELECT * FROM times WHERE time=:time", {"time": time})
-        return self.c.fetchmany(3)
+        return self.c.fetchall()
 
     def get_settings(self, cursor) -> list:
         """
@@ -451,8 +518,7 @@ class CubeTimer:
                 self.TimesListbox.insert(tk.END, float(self.TimeLabel["text"]) + 2)
 
             else:
-                self.TimesListbox.insert(tk.END, self.TimeLabel["text"])
-                print ("DNF")
+                self.TimesListbox.insert(tk.END, "DNF")
 
             if len(self.times) >= 58:
                 self.TimesScrollbar.grid(row=0, column=2, sticky=tk.N + tk.S)
@@ -465,15 +531,24 @@ class CubeTimer:
             # Add time to self.times and database
             now = datetime.datetime.now()
             time_date = datetime.datetime(now.year, now.month, now.day, now.hour, now.minute)
-            if not self.plus_2:
-                time = Time(float(self.TimeLabel["text"]), self.scramble, time_date)
+            time = self.TimeLabel["text"]
+
+            # If time is greater than 59 seconds
+            if Time.convert_seconds(time) != 0.0:
+                time = Time.convert_seconds(time)
+
+            if not self.plus_2 and not self.DNF:
+                time = Time(float(time), self.scramble, time_date)
+
+            elif self.plus_2:
+                time = Time(float(time + 2), self.scramble, time_date)
 
             else:
-                time = Time(float(self.TimeLabel["text"]) + 2, self.scramble, time_date)
+                time = Time(float(time), self.scramble, time_date, DNF=True)
 
+            self.save_time(time)
             self.plus_2 = False
             self.DNF = False
-            self.save_time(time)
 
             # Update stats
             self.update_stats(times)
@@ -495,35 +570,151 @@ class CubeTimer:
         except IndexError:
             return
 
-        time_info = list(self.get_time(float(time)))
-        if not time_info:
-            tk.messagebox.showerror("Non-existant time", f"The time '{time}' does not exist.'")
-            return
+        index = self.TimesListbox.curselection()[0] - 1
+        if time == "DNF":
+            self.c.execute("SELECT * FROM times WHERE DNF=:DNF", {"DNF": 1})
+            DNF_times = list(self.c.fetchall())
+            time_info = []
 
-        time = time_info[0][0]
-        scramble = time_info[0][1]
-        date = time_info[0][2]
-        date = datetime.datetime.strptime(date, "%Y-%m-%d-%I:%M %p")
+            for time in range(len(DNF_times)):
+                try:
+                    time_info = list(DNF_times)[index]
 
-        time = Time(float(time), scramble, date)
+                except IndexError:
+                    time_info = list(DNF_times)[-1]
+
+            if not time_info:
+                tk.messagebox.showerror("Non-existant time", f"The time '{time}' does not exist.'")
+                return
+
+            time = time_info[0]
+            scramble = time_info[1]
+            date = time_info[2]
+            date = datetime.datetime.strptime(date, self.DATE_FORMAT)
+
+            time = Time(float(time), scramble, date, DNF=True)
+
+        elif ":" in str(time):
+            time = Time.convert_seconds(time)
+            time_info = list(self.get_time(time))[0]
+
+            if not time_info:
+                tk.messagebox.showerror("Non-existant time", f"The time '{time}' does not exist.'")
+                return
+
+            time = time_info[0]
+            scramble = time_info[1]
+            date = time_info[2]
+            date = datetime.datetime.strptime(date, self.DATE_FORMAT)
+
+            time = Time(float(time), scramble, date)
+
+        else:
+            time_info = list(self.get_time(float(time)))[0]
+
+            if not time_info:
+                tk.messagebox.showerror("Non-existant time", f"The time '{time}' does not exist.'")
+                return
+
+            time = time_info[0]
+            scramble = time_info[1]
+            date = time_info[2]
+            date = datetime.datetime.strptime(date, self.DATE_FORMAT)
+
+            time = Time(float(time), scramble, date)
+
         timefont = font.Font(size=15)
-        TimeLabel = tk.Label(self.TimeOptions, text=time.time, font=timefont)
+
+        if time.time > 59:
+            TimeLabel = tk.Label(self.TimeOptions, text=Time.convert_minutes(time.time), font=timefont)
+
+        elif not time.DNF:
+            TimeLabel = tk.Label(self.TimeOptions, text=time.time, font=timefont)
+
+        else:
+            TimeLabel = tk.Label(self.TimeOptions, text="DNF", font=timefont)
+
         DateLabel = tk.Label(self.TimeOptions, text=time.date)
         ScrambleLabel = tk.Label(self.TimeOptions, text=time.scramble)
-        DeleteTimeButton = tk.Button(self.TimeOptions, text="Delete",
-                                     command=lambda: self.delete_time(time.time, parent=self.TimeOptions))
+        if time.DNF:
+            DeleteTimeButton = tk.Button(self.TimeOptions, text="Delete",
+                                         command=lambda: self.delete_time("DNF", parent=self.TimeOptions))
 
-        # Bind delete key
+        else:
+            DeleteTimeButton = tk.Button(self.TimeOptions, text="Delete",
+                                         command=lambda: self.delete_time(time, parent=self.TimeOptions))
+
+        DNFButton = tk.Button(self.TimeOptions, text="DNF")
+        Plus2Button = tk.Button(self.TimeOptions, text="+2")
+
+        # Bindings
         self.TimeOptions.bind("<Delete>", lambda event: self.delete_time(time, parent=self.TimeOptions))
+        DNFButton.bind("<Button-1>", lambda event: self.DNF_time(time, parent=self.TimeOptions))
+        Plus2Button.bind("<Button-1>", lambda event: self.plus_2_time(time, parent=self.TimeOptions))
 
-        TimeLabel.pack()
-        ScrambleLabel.pack()
-        DateLabel.pack()
-        DeleteTimeButton.pack()
+        TimeLabel.grid(row=0, column=1)
+        ScrambleLabel.grid(row=1, column=1)
+        DateLabel.grid(row=2, column=1)
+        DeleteTimeButton.grid(row=3, column=0)
+        if not time.DNF:
+            DNFButton.grid(row=3, column=1)
+        Plus2Button.grid(row=3, column=2)
+
+    def DNF_time(self, time, parent=None):
+        """
+        DNF's the time provided, destroys parent if parent is not None
+        :param time: CubeUtils.Time
+        :param parent: tkinter.Tk()
+        """
+        self.delete_time(time, confirm=False)
+        time = Time(time.time, time.scramble, datetime.datetime.strptime(time.date, self.DATE_FORMAT), DNF=True)
+        self.save_time(time)
+        self.TimesListbox.delete(0, tk.END)
+
+        for time in self.times:
+            if not time.DNF:
+                self.TimesListbox.insert(tk.END, time.time)
+
+            else:
+                self.TimesListbox.insert(tk.END, "DNF")
+
+        if parent is not None:
+            parent.destroy()
+
+    def plus_2_time(self, time, parent=None):
+        """
+        Add 2 seconds to the time provided
+        :param time: CubeUtils.Time
+        :param parent: tkinter.Tk
+        """
+        self.delete_time(time, confirm=False)
+        if not time.DNF:
+            time = Time(Time.plus_2(time.time), time.scramble, datetime.datetime.strptime(time.date, self.DATE_FORMAT))
+
+        else:
+            time = Time(Time.plus_2(time.time), time.scramble, datetime.datetime.strptime(time.date, self.DATE_FORMAT), DNF=True)
+
+        self.save_time(time)
+        for time in self.times:
+            if not time.DNF:
+                if time.time > 59:
+                    self.TimesListbox.insert(tk.END, Time.convert_minutes(time.time))
+
+                else:
+                    self.TimesListbox.insert(tk.END, time.time)
+
+            else:
+                self.TimesListbox.insert(tk.END, "DNF")
+
+        if parent is not None:
+            parent.destroy()
 
     def open_settings(self):
         """Opens the settings in a new tkinter.Tk() window"""
         # Settings window setup
+        if self.Settings is not None:
+            self.Settings.destroy()
+
         self.Settings = tk.Tk()
         self.Settings.iconbitmap("Assets\\cube.ico")
         self.Settings.resizable(False, False)
@@ -594,12 +785,8 @@ class CubeTimer:
         CopyTimesButton.bind("<Button-1>", lambda event: self.copy_times(CopyTimesButton))
         self.InspectionCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor))
         self.DisplayTimeCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor, setting="display time"))
-        try:
-            self.Settings.protocol("WM_DELETE_WINDOW",
-                                   lambda: self.change_scramble_len(conn, cursor, ScrambleEntry, quit_window=True))
-
-        except TclError:
-            self.Settings.quit()
+        self.Settings.protocol("WM_DELETE_WINDOW",
+                               lambda: self.change_scramble_len(conn, cursor, ScrambleEntry, quit_window=True))
 
         # Widget placement
         SettingsLabel.pack()
@@ -622,9 +809,15 @@ class CubeTimer:
         try:
             if self.scramble_len == int(entry.get()):
                 if quit_window:
-                    self.Settings.destroy()
+                    try:
+                        self.Settings.destroy()
+                        self.Settings = None
 
-                return
+                    except TclError:
+                        pass
+
+                    finally:
+                        return
 
             self.scramble_len = int(entry.get())
 
@@ -653,31 +846,57 @@ class CubeTimer:
         to_copy = ""
         max_found = False
         min_found = False
-        times = list(time.time for time in self.times)
-        for time in self.times:
-            if self.times[-1] != time:
-                if time.time == CubeUtils.get_best_time(times) and not max_found:
-                    to_copy += f"({time.time}), "
-                    max_found = True
+        times = list(time.time if not time.DNF else "DNF" for time in self.times)
 
+        for time in self.times:
+            # Check if the the time is the last element of self.times
+            if self.times[-1] != time:
+                # Check if the current time is the best in the list
+                if time.time == CubeUtils.get_best_time(times) and not max_found:
+                    if not time.DNF:
+                        to_copy += f"({time.time}), "
+
+                    else:
+                        to_copy += "(DNF), "
+
+                # Check if the current time is the worst time in the list
                 elif time.time == CubeUtils.get_worst_time(times) and not min_found:
-                    to_copy += f"({time.time}), "
-                    min_found = True
+                    if not time.DNF:
+                        to_copy += f"({time.time}), "
+
+                    else:
+                        to_copy += "(DNF), "
 
                 else:
-                    to_copy += f"{time.time}, "
+                    if not time.DNF:
+                        to_copy += f"{time.time}, "
+
+                    else:
+                        to_copy += "DNF, "
 
             else:
+                # Check if the current time is the best in the list
                 if time.time == CubeUtils.get_best_time(times) and not max_found:
-                    to_copy += f"({time.time})"
-                    max_found = True
+                    if not time.DNF:
+                        to_copy += f"({time.time})"
 
+                    else:
+                        to_copy += "(DNF)"
+
+                # Check if the current time is the worst time in the list
                 elif time.time == CubeUtils.get_worst_time(times) and not min_found:
-                    to_copy += f"({time.time})"
-                    min_found = True
+                    if not time.DNF:
+                        to_copy += f"({time.time})"
+
+                    else:
+                        to_copy += "(DNF)"
 
                 else:
-                    to_copy += f"{time.time}"
+                    if not time.DNF:
+                        to_copy += f"{time.time}"
+
+                    else:
+                        to_copy += "(DNF)"
 
         copy(to_copy)
         button.config(text="Copied")
@@ -761,7 +980,7 @@ class CubeTimer:
 
     def update_timer(self, recursive=True):
         """
-        Updates the timer every 100 miliseconds
+        Updates the timer, if recursive, updates the timer every 100 miliseconds
         :param recursive: bool
         """
         self.mean = "N/A"
@@ -821,7 +1040,13 @@ class CubeTimer:
         """
         # Convert to float array
         for time in range(len(times)):
-            times[time] = float(times[time])
+            try:
+                times[time] = float(times[time])
+
+            # DNF / time over 60 seconds
+            except ValueError:
+                if times[time] != "DNF":
+                    times[time] = Time.convert_seconds(times[time])
 
         # Get best and worst times
 
@@ -856,6 +1081,30 @@ class CubeTimer:
         else:
             self.mean = CubeUtils.get_average(times)
 
+        if isinstance(self.mean, float) or isinstance(self.mean, int):
+            if self.mean > 59:
+                self.mean = Time.convert_minutes(self.mean)
+
+        if isinstance(self.ao5, float) or isinstance(self.ao5, int):
+            if self.ao5 > 59:
+                self.ao5 = Time.convert_minutes(self.ao5)
+
+        if isinstance(self.ao12, float) or isinstance(self.ao12, int):
+            if self.ao12 > 59:
+                self.ao12 = Time.convert_minutes(self.ao12)
+
+        if isinstance(self.ao100, float) or isinstance(self.ao100, int):
+            if self.ao100 > 59:
+                self.ao100 = Time.convert_minutes(self.ao100)
+
+        if isinstance(self.best_time, float) or isinstance(self.best_time, int):
+            if self.best_time > 59:
+                self.best_time = Time.convert_minutes(self.best_time)
+
+        if isinstance(self.worst_time, float) or isinstance(self.worst_time, int):
+            if self.worst_time > 59:
+                self.worst_time = Time.convert_minutes(self.worst_time)
+
         # Display stats
         self.AveragesLabel.config(
             text="mean: "
@@ -865,33 +1114,34 @@ class CubeTimer:
                  + " ao12: "
                  + str(self.ao12)
                  + " ao100: "
-                 + str(self.ao100) + " best: " + str(self.best_time) + " worst: " + str(self.worst_time),
+                 + str(self.ao100) + " best: " + str(self.best_time) + " worst: " + str(self.worst_time)
+                 + " solves: " + str(len(self.times)),
             bg="light green",
             font=self.averagefont,
         )
 
     def toggle_fullscreen(self):
         """Puts the window in fullscreen"""
-        self.fullscreen = not self.fullscreen
+        self.fullscreen = True
         self.parent.attributes("-fullscreen", self.fullscreen)
 
     def exit_fullscreen(self):
         """Exits fullscreen"""
         self.fullscreen = False
-        self.parent.attributes("-fullscreen", False)
+        self.parent.attributes("-fullscreen", self.fullscreen)
 
     def quit(self):
         """Quits the window and any other opened windows"""
         try:
-            self.Settings.quit()
+            self.Settings.destroy()
 
-        except AttributeError:
+        except (TclError, AttributeError):
             pass
 
         try:
-            self.TimeOptions.quit()
+            self.TimeOptions.destroy()
 
-        except AttributeError:
+        except (TclError, AttributeError):
             pass
 
         self.conn.close()

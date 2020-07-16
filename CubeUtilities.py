@@ -76,7 +76,7 @@ class CubeUtils:
         """
         Returns the best time
         :param times: list
-        :returns: int
+        :returns: float
         """
         if cls.find_DNFs(times):
             return "DNF"
@@ -87,18 +87,21 @@ class CubeUtils:
             return min(times_)
 
         else:
-            return min(times)
+            best = min(times)
+            return best
 
     @classmethod
     def get_worst_time(cls, times) -> int:
         """
         Returns the worst time
         :param times: list
-        :returns: int
+        :returns: float
         """
         if "DNF" in times:
             return "DNF"
-        return max(times)
+
+        worst = max(times)
+        return worst
 
     @classmethod
     def find_DNFs(cls, times):
@@ -165,8 +168,12 @@ class CubeUtils:
         Returns average of times depending on ao parameter, defaulting to the whole list
         :param times: list
         :param ao: int
-        :return: float
+        :returns: float / str
         """
+        for time in range(len(times)):
+            if isinstance(times[time], str):
+                times[time] = Time.convert_seconds(times[time])
+
         if len(times) == 0:
             return 0.0
 
@@ -202,7 +209,10 @@ class CubeUtils:
             times_[time] = float(times_[time])
 
         try:
-            return round(float(sum(times_)) / len(times_), 2)
+            average = round(float(sum(times_)) / len(times_), 2)
+            if average > 59:
+                average = Time.convert_minutes(average)
+            return average
 
         except ZeroDivisionError:
             return 0.0
@@ -224,6 +234,74 @@ class Time:
         self.date = datetime.datetime.strftime(date, "%Y-%m-%d-%I:%M %p")
         self.DNF = DNF
 
+    @staticmethod
+    def convert_seconds(time):
+        """
+        Converts the time to seconds, time must be equal to or greater than one minute
+        :param time: str
+        :returns: float
+        """
+        if ":" in time:
+            minutes = time.split(":")[0]
+            seconds = time.split(":")[-1]
+            if seconds[0] == "0":
+                seconds = seconds[1: -1] + seconds[-1]
+
+            time = str((float(minutes) * 60) + float(seconds))
+            seconds = round(float(time), 2)
+
+            return round(seconds, 2)
+
+        return 0.0
+
+    @staticmethod
+    def convert_minutes(seconds):
+        """
+        Converts the seconds to minutes, time must be greater then 59 seconds
+        :param seconds: float
+        :returns: str
+        """
+        time = str(datetime.timedelta(seconds=seconds))
+        time = time[2: -1] + time[-1]
+        if time[0] == "0":
+            time = time[1: -1] + time[-1]
+
+        decimals = round(float("0." + time.split(".")[-1]), 2)
+        decimals = str(decimals)[1: -1] + str(decimals)[-1]
+        decimals = decimals.replace(".", "")
+        old_decimals = time.split(".")[-1]
+
+        time = time.replace(old_decimals, decimals)
+        return time
+
+    @staticmethod
+    def plus_2(time):
+        """
+        Returns plus 2 of a time, time can be over 59 seconds
+        :param time: float / str
+        """
+
+        # If time is less than a minute
+        if isinstance(time, float):
+            return round(time + 2, 2)
+
+        # If time is over 59 seconds
+        elif isinstance(time, str):
+            time = time.replace(".", ":")
+            minute, seconds, miliseconds = time.split(":")
+
+            if seconds[0] == "0":
+                seconds = seconds[1]
+
+            seconds = int(seconds)
+            seconds += 2
+            seconds = "0" + str(seconds)
+
+            return minute + ":" + str(seconds) + "." + miliseconds
+
+        else:
+            raise Exception("Time argument must be of type str or float.")
+
     def get_date(self, format="%Y-%m-%d-%I:%M %p"):
         """
         Returns the formatted date
@@ -237,5 +315,5 @@ class Time:
 
 
 if __name__ == "__main__":
-    print (" ".join(CubeUtils.generate_scramble(25)))
+    print (" ".join(CubeUtils.generate_scramble()))
 
