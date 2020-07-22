@@ -75,7 +75,7 @@ class CubeUtils:
     def get_best_time(cls, times) -> int:
         """
         Returns the best time
-        :param times: list
+        :param times: float[]
         :returns: float
         """
         if cls.find_DNFs(times):
@@ -94,7 +94,7 @@ class CubeUtils:
     def get_worst_time(cls, times) -> int:
         """
         Returns the worst time
-        :param times: list
+        :param times: float[]
         :returns: float
         """
         if "DNF" in times:
@@ -107,7 +107,7 @@ class CubeUtils:
     def find_DNFs(cls, times):
         """
         Returns True if there is times contains more than one DNF
-        :param times: list
+        :param times: float[]
         :returns: bool
         """
         DNFS = {}
@@ -124,7 +124,7 @@ class CubeUtils:
     def validate(cls, scramble) -> bool:
         """
         Returns True if scramble is valid, else, returns False
-        :param scramble: list
+        :param scramble: char[]
         :return: bool
         """
         prev_move = scramble[0]
@@ -141,7 +141,7 @@ class CubeUtils:
     def check_for_pattern(cls, scramble) -> bool:
         """
         Checks scramble for any patterns, Returns True if there is a pattern
-        :param scramble: list
+        :param scramble: char[]
         :return: boolean
         """
         prev_move = scramble[0]
@@ -166,7 +166,7 @@ class CubeUtils:
     def get_average(cls, times, ao=-1) -> float:
         """
         Returns average of times depending on ao parameter, defaulting to the whole list
-        :param times: list
+        :param times: float[]
         :param ao: int
         :returns: float / str
         """
@@ -229,6 +229,15 @@ class Time:
         if not isinstance(date, datetime.datetime):
             raise TypeError("date parameter must be of type datetime.datetime")
 
+        if not isinstance(time, float):
+            raise TypeError("time parameter must be of type float")
+
+        if not isinstance(scramble, str):
+            raise TypeError("scramble parameter must be of type str")
+
+        if not isinstance(DNF, bool):
+            raise TypeError("DNF parameter must be of type bool")
+
         self.time = time
         self.scramble = scramble
         self.date = datetime.datetime.strftime(date, "%Y-%m-%d-%I:%M %p")
@@ -257,10 +266,13 @@ class Time:
     @staticmethod
     def convert_minutes(seconds):
         """
-        Converts the seconds to minutes, time must be greater then 59 seconds
+        Converts the seconds to minutes, time must be greater then 59 seconds and it must be a float
         :param seconds: float
         :returns: str
         """
+        if not isinstance(seconds, float):
+            raise TypeError("seconds argument must be of type float")
+
         time = str(datetime.timedelta(seconds=seconds))
         time = time[2: -1] + time[-1]
         if time[0] == "0":

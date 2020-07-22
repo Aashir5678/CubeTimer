@@ -11,6 +11,8 @@ from _tkinter import TclError
 from CubeUtilities import CubeUtils, Time
 from PIL import ImageTk, Image
 from os import getcwd, chdir
+from os.path import exists
+from tkinter.filedialog import askopenfilename
 
 
 path = getcwd().split("\\")
@@ -38,6 +40,7 @@ class CubeTimer:
         self.scramble_len = 25
         self.INSPECTION_COUNT = 16
         self.DATE_FORMAT = "%Y-%m-%d-%I:%M %p"
+        self.ON_CLOSE = "WM_DELETE_WINDOW"
         self.best_time = 0
         self.worst_time = 0
         self.start = 0
@@ -103,26 +106,8 @@ class CubeTimer:
             self.TimesListbox = tk.Listbox(self.parent, height=10)
 
         else:
-            if len(self.times) >= 5:
-                self.TimesListbox = tk.Listbox(self.parent, height=len(self.times), yscrollcommand=self.TimesScrollbar.set)
-                self.TimesScrollbar.config(command=self.TimesListbox.yview())
-
-            else:
-                self.TimesListbox = tk.Listbox(self.parent, height=5)
-
-            self.TimesListbox.config(height=len(self.times))
-
-            # Insert times in to Listbox
-            for time in self.times:
-                if not time.DNF:
-                    if 59 < time.time:
-                        self.TimesListbox.insert(tk.END, Time.convert_minutes(time.time))
-
-                    else:
-                        self.TimesListbox.insert(tk.END, time.time)
-
-                else:
-                    self.TimesListbox.insert(tk.END, "DNF")
+            self.TimesListbox = tk.Listbox(self.parent, height=len(self.times))
+            self.insert_times()
 
         self.TimesListbox.config(width=10)
 
@@ -213,6 +198,7 @@ class CubeTimer:
 
         # Bindings
 
+        self.parent.bind("e", lambda event: self.export_times())
         self.TimesListbox.bind(
             "<Double-Button-1>", lambda item: self.time_options()
         )
@@ -223,9 +209,9 @@ class CubeTimer:
         )
 
         self.SettingsButton.bind("<Enter>", lambda event: self.enlarge_settings_button())
-        self.SettingsButton.bind("<Leave>", lambda event: self.reduce_settings_button())
+        self.SettingsButton.bind("<Leave>", lambda event: self.shrink_settings_button())
         try:
-            self.parent.protocol("WM_DELETE_WINDOW", lambda: self.quit())
+            self.parent.protocol(self.ON_CLOSE, lambda: self.quit())
 
         except TclError:
             pass
@@ -327,24 +313,7 @@ class CubeTimer:
                 self.c.execute("DELETE from times WHERE time = :time AND scramble=:scramble AND date = :date",
                                {"time": time.time, "scramble": time.scramble, "date": time.date})
 
-            self.TimesListbox.delete(0, tk.END)
-
-            if len(self.times) >= 5:
-                self.TimesListbox.config(height=len(self.times))
-
-            else:
-                self.TimesListbox.config(height=5)
-
-            for time in self.times:
-                if not time.DNF:
-                    if time.time > 59:
-                        self.TimesListbox.insert(tk.END, Time.convert_minutes(time.time))
-
-                    else:
-                        self.TimesListbox.insert(tk.END, time.time)
-
-                else:
-                    self.TimesListbox.insert(tk.END, "DNF")
+            self.insert_times()
 
             self.update_stats(list(self.TimesListbox.get(0, tk.END)))
             if parent is not None:
@@ -553,7 +522,8 @@ class CubeTimer:
             # Update stats
             self.update_stats(times)
 
-            # Rebind start timer and space release
+            # Rebind start timer and space releases
+            self.parent.after(300)
             self.parent.bind(
                 "<space>", lambda event: self.space_hold(),
             )
@@ -570,6 +540,13 @@ class CubeTimer:
         except IndexError:
             return
 
+        def on_close():
+            """Called when TimeOptions is closed"""
+            self.TimesListbox.config(state=tk.NORMAL)
+            self.TimeOptions.destroy()
+            self.parent.focus()
+
+        self.unfocus_times()
         index = self.TimesListbox.curselection()[0] - 1
         if time == "DNF":
             self.c.execute("SELECT * FROM times WHERE DNF=:DNF", {"DNF": 1})
@@ -649,6 +626,7 @@ class CubeTimer:
 
         # Bindings
         self.TimeOptions.bind("<Delete>", lambda event: self.delete_time(time, parent=self.TimeOptions))
+        self.TimeOptions.protocol(self.ON_CLOSE, on_close)
         DNFButton.bind("<Button-1>", lambda event: self.DNF_time(time, parent=self.TimeOptions))
         Plus2Button.bind("<Button-1>", lambda event: self.plus_2_time(time, parent=self.TimeOptions))
 
@@ -669,14 +647,7 @@ class CubeTimer:
         self.delete_time(time, confirm=False)
         time = Time(time.time, time.scramble, datetime.datetime.strptime(time.date, self.DATE_FORMAT), DNF=True)
         self.save_time(time)
-        self.TimesListbox.delete(0, tk.END)
-
-        for time in self.times:
-            if not time.DNF:
-                self.TimesListbox.insert(tk.END, time.time)
-
-            else:
-                self.TimesListbox.insert(tk.END, "DNF")
+        self.insert_times()
 
         if parent is not None:
             parent.destroy()
@@ -695,16 +666,7 @@ class CubeTimer:
             time = Time(Time.plus_2(time.time), time.scramble, datetime.datetime.strptime(time.date, self.DATE_FORMAT), DNF=True)
 
         self.save_time(time)
-        for time in self.times:
-            if not time.DNF:
-                if time.time > 59:
-                    self.TimesListbox.insert(tk.END, Time.convert_minutes(time.time))
-
-                else:
-                    self.TimesListbox.insert(tk.END, time.time)
-
-            else:
-                self.TimesListbox.insert(tk.END, "DNF")
+        self.insert_times()
 
         if parent is not None:
             parent.destroy()
@@ -716,6 +678,7 @@ class CubeTimer:
             self.Settings.destroy()
 
         self.Settings = tk.Tk()
+        self.Settings.geometry("600x240")
         self.Settings.iconbitmap("Assets\\cube.ico")
         self.Settings.resizable(False, False)
         self.Settings.title("Settings")
@@ -755,7 +718,7 @@ class CubeTimer:
                                 "scramble_len": self.scramble_len})
 
         # Setting widgets
-        SettingFont = font.Font(size=10, weight="bold")
+        SettingFont = font.Font(size=40, weight="bold")
         SettingsLabel = tk.Label(self.Settings, text="Settings", font=SettingFont)
         self.DisplayTimeCheckbutton = tk.Checkbutton(self.Settings, text="Display time", variable=self.Displaytimevar,
                                                      offvalue=0,
@@ -774,6 +737,9 @@ class CubeTimer:
 
         ScrambleLabel = tk.Label(self.Settings, text="Scramble length:")
         ScrambleEntry = tk.Entry(self.Settings)
+
+        ImportTimesButton = tk.Button(self.Settings, text="Import times")
+        ExportTimesButton = tk.Button(self.Settings, text="Export times")
         ClearSolvesButton = tk.Button(self.Settings, text="Clear times", command=lambda: self.clear_times())
         CopyTimesButton = tk.Button(self.Settings, text="Copy times")
         GenerateScrambleButton = tk.Button(self.Settings, text="Generate scramble", command=lambda: self.insert_scramble())
@@ -783,9 +749,11 @@ class CubeTimer:
         # Bindings
         ScrambleEntry.bind("<Return>", lambda event: self.change_scramble_len(conn, cursor, ScrambleEntry))
         CopyTimesButton.bind("<Button-1>", lambda event: self.copy_times(CopyTimesButton))
+        ImportTimesButton.bind("<Button-1>", lambda event: self.import_times())
+        ExportTimesButton.bind("<Button-1>", lambda event: self.export_times())
         self.InspectionCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor))
         self.DisplayTimeCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor, setting="display time"))
-        self.Settings.protocol("WM_DELETE_WINDOW",
+        self.Settings.protocol(self.ON_CLOSE,
                                lambda: self.change_scramble_len(conn, cursor, ScrambleEntry, quit_window=True))
 
         # Widget placement
@@ -794,9 +762,109 @@ class CubeTimer:
         self.DisplayTimeCheckbutton.pack()
         ScrambleLabel.pack()
         ScrambleEntry.pack()
-        ClearSolvesButton.pack()
-        CopyTimesButton.pack()
-        GenerateScrambleButton.pack()
+        ClearSolvesButton.place(x=260, y=165)
+        CopyTimesButton.place(x=260, y=125)
+        GenerateScrambleButton.place(x=245, y=200)
+        ExportTimesButton.place(x=400, y=125)
+        ImportTimesButton.place(x=100, y=125)
+
+    def import_times(self, filename=None):
+        """
+        Imports the times in to the current session, the contents of the Text widget or the file
+        must follow the format as followed, brackets aren't required and if times are stored in
+        file, you must separate by a new line
+
+        Text widget:
+        (5.43), 32.43, 23.58, (45.76)
+
+        File:
+        (5.43)
+        43.43
+        (4.43)
+        55.84
+
+        :param filename: str
+        """
+
+        # Get the contents of Text widget / file
+
+        imported_times = []
+        if filename is None:
+            filename = askopenfilename()
+            if not filename.endswith(".txt"):
+                tk.messagebox.showerror("Invalid extension", "File extension must be .txt")
+                return
+
+        if exists(filename):
+            with open(filename, "r") as f:
+                times = f.readlines()
+                for time in times:
+                    info = time.split(", ")
+                    if len(info) == 3:
+                        DNF = False
+                        time_, scramble, date = info
+
+                    elif len(info) == 4:
+                        DNF = True
+                        time_, scramble, date, _ = info
+
+                    else:
+                        return
+                    time_ = time_.replace("(", "").replace(")", "")
+                    date = date.replace("\n", "")
+                    date = datetime.datetime.strptime(date, self.DATE_FORMAT)
+                    if not DNF:
+                        imported_times.append(Time(float(time_), scramble, date))
+
+                    else:
+                        imported_times.append(Time(float(time_), scramble, date, DNF=True))
+
+                    if len(times) == len(imported_times):
+                        break
+
+                else:
+                    return
+
+        else:
+            tk.messagebox.showerror("Invalid path", "This path does not exist.")
+            return
+
+        # Save times
+        for time in imported_times:
+            self.save_time(time)
+
+        # Insert times in to TimesListbox
+        self.insert_times()
+
+    def export_times(self, filename=None):
+        """
+        Exports the times in the current session to a file, contents of file will be overwritten
+        :param filename: str
+        """
+        if filename is None:
+            filename = askopenfilename()
+
+        if not filename.endswith(".txt"):
+            tk.messagebox.showerror("Invalid extension", "File extension must be .txt")
+            return
+
+        if not exists(filename):
+            file = open(filename, "x")
+            file.close()
+
+        to_write = []
+        for time in self.times:
+            if time.DNF:
+                line = f"{time.time}, {time.scramble}, {time.date}, DNF"
+                to_write.append(line)
+
+            else:
+                line = f"{time.time}, {time.scramble}, {time.date}"
+                to_write.append(line)
+
+        to_write = "\n".join(to_write)
+        with open(filename, "w") as f:
+            f.write(to_write)
 
     def change_scramble_len(self, conn, cursor, entry, quit_window=False):
         """
@@ -908,6 +976,7 @@ class CubeTimer:
         delete_times = tk.messagebox.askyesno("Delete all times", "Are you sure you want to clear all your times ?")
         if delete_times:
             self.TimesListbox.delete(0, tk.END)
+            self.TimesListbox.config(height=5)
             self.times.clear()
             with self.conn:
                 self.c.execute("DELETE FROM times")
@@ -933,8 +1002,8 @@ class CubeTimer:
         self.SettingsButton.config(image=image)
         self.SettingsButton.image = image
 
-    def reduce_settings_button(self):
-        """Reduces the settings button to its default size"""
+    def shrink_settings_button(self):
+        """Shrinks the settings button to its default size"""
         image = Image.open("Assets\\gear.png")
         image = image.resize((60, 60), Image.ANTIALIAS)
         image = ImageTk.PhotoImage(image)
@@ -993,26 +1062,11 @@ class CubeTimer:
 
             # Checks if diff is greater than or equal to a minute
             if round(diff) >= 60:
-                diff2 = diff / 60
-                minutes = int(str(diff2)[0: str(diff2).rfind(".")])
-                seconds = round(diff % 60)
+                diff = Time.convert_minutes(diff)
 
-                if not seconds:
-                    seconds = "00"
+                if len(diff.split(".")[-1]) == 1:
+                    diff += "0"
 
-                elif seconds <= 9:
-                    seconds = "0" + str(seconds)
-
-                else:
-                    seconds = str(seconds)
-
-                decimals = str(round(diff, 2))[-2] + str(round(diff, 2))[-1]
-                if "." in decimals:
-                    decimals = str(round(diff, 3))[-2] + str(round(diff, 3))[-1]
-
-                diff = f"{minutes}:{seconds}.{decimals}"
-
-            # Checks if diff is greater than or equal to 10
             elif round(diff) >= 10:
                 diff = str(diff)
                 diff = diff[0:4] + diff[4]
@@ -1028,6 +1082,8 @@ class CubeTimer:
 
             if self.display_time:
                 self.TimeLabel.config(text=diff)
+
+        self.parent.update()
 
         # Calls it self every 100 miliseconds
         if recursive:
@@ -1120,9 +1176,38 @@ class CubeTimer:
             font=self.averagefont,
         )
 
+    def insert_times(self):
+        """Inserts every time in self.times in to self.TimesListbox"""
+        self.TimesListbox.delete(0, tk.END)
+
+        if len(self.times) >= 5:
+            self.TimesListbox.config(height=len(self.times), yscrollcommand=self.TimesScrollbar.set)
+            self.TimesScrollbar.config(command=self.TimesListbox.yview())
+
+        else:
+            self.TimesListbox.config(height=5)
+
+        for time in self.times:
+            if not time.DNF:
+                if time.time > 59:
+                    self.TimesListbox.insert(tk.END, Time.convert_minutes(time.time))
+
+                else:
+                    self.TimesListbox.insert(tk.END, time.time)
+
+            else:
+                self.TimesListbox.insert(tk.END, "DNF")
+
+        self.TimesListbox.update()
+
+    def unfocus_times(self):
+        """Un-highlights any item from TimesListbox"""
+        self.TimesListbox.config(state=tk.DISABLED)
+        self.parent.focus()
+
     def toggle_fullscreen(self):
         """Puts the window in fullscreen"""
-        self.fullscreen = True
+        self.fullscreen = not self.fullscreen
         self.parent.attributes("-fullscreen", self.fullscreen)
 
     def exit_fullscreen(self):
@@ -1148,7 +1233,11 @@ class CubeTimer:
         self.parent.quit()
 
 
-if __name__ == "__main__":
+def main():
     root = tk.Tk()
     app = CubeTimer(root)
     root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
