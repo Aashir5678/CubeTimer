@@ -1,8 +1,10 @@
 import random
 import datetime
+import tkinter as tk
 
 
 class CubeUtils:
+    """Contains essential methods for a cube timer"""
     # Class variables
     LETTERS = ["R", "U", "L", "D", "F", "B"]
     SCRAMBLE_LEN = 23
@@ -172,7 +174,7 @@ class CubeUtils:
         """
         for time in range(len(times)):
             if isinstance(times[time], str):
-                times[time] = Time.convert_seconds(times[time])
+                times[time] = Time.convert_to_seconds(times[time])
 
         if len(times) == 0:
             return 0.0
@@ -211,7 +213,7 @@ class CubeUtils:
         try:
             average = round(float(sum(times_)) / len(times_), 2)
             if average > 59:
-                average = Time.convert_minutes(average)
+                average = Time.convert_to_minutes(average)
             return average
 
         except ZeroDivisionError:
@@ -219,6 +221,7 @@ class CubeUtils:
 
 
 class Time:
+    """Creates a time object that stores its time, scramble, date and whether or not it is a DNF"""
     def __init__(self, time, scramble, date, DNF=False):
         """
         :param time: float
@@ -244,7 +247,7 @@ class Time:
         self.DNF = DNF
 
     @staticmethod
-    def convert_seconds(time):
+    def convert_to_seconds(time):
         """
         Converts the time to seconds, time must be equal to or greater than one minute
         :param time: str
@@ -264,7 +267,7 @@ class Time:
         return 0.0
 
     @staticmethod
-    def convert_minutes(seconds):
+    def convert_to_minutes(seconds):
         """
         Converts the seconds to minutes, time must be greater then 59 seconds and it must be a float
         :param seconds: float
@@ -326,6 +329,127 @@ class Time:
         return f"{self.time}, {self.scramble}, {self.date}"
 
 
+class TimeTable(tk.Frame):
+    """Creates a time table using a tk.Canvas"""
+    def __init__(self, parent, times, *args, **kwargs):
+        """
+        :param parent: tk.Tk()
+        :param times: list[CubeUtils.Time]
+        """
+
+        # Initialize super class and define attributes
+        super().__init__(*args, **kwargs)
+        self.TIME_ATTRS = ["Time", "Scramble", "Date", "DNF"]
+        self.fullscreen = False
+        self.times = times
+        self.canvas = tk.Canvas(self)
+        self.frame = tk.Frame(self.canvas)
+        self.parent = parent
+
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.canvas.create_window(2, 2, window=self.frame, anchor="nw")
+
+        # Bindings
+        self.frame.bind("<Configure>", self.on_config)
+        if len(self.times) >= 49:
+            self.parent.bind("<MouseWheel>", self.on_mousewheel)
+
+        self.parent.bind("<F11>", lambda event: self.toggle_fullscreen())
+        self.parent.bind("<Escape>", lambda event: self.exit_fullscreen())
+
+        # Populate frame
+        self.populate()
+
+    def populate(self):
+        """Populates the frame with the times"""
+        # Insert time attributes in text widgets
+        for column, attr in enumerate(self.TIME_ATTRS):
+            text = tk.Text(self.frame, font=("Arial", 15, "bold"), width=50, height=1)
+            text.insert("0.0", attr)
+            text.config(state=tk.DISABLED)
+            column += 4
+            text.grid(row=0, column=column)
+
+        # Insert times in text widgets
+        for time_count, time in enumerate(self.times):
+            time_info = [time_count + 1, time.time, time.scramble, time.date, time.DNF]
+            time_info_font = ("Arial", 15, "bold")
+            for column, info in enumerate(time_info):
+                if isinstance(info, int) and not isinstance(info, bool):
+                    text = tk.Text(self.frame, font=time_info_font, width=2 if len(str(info)) <= 2 else len(str(info)),
+                                   height=1, fg="#ff5000")
+
+                else:
+                    text = tk.Text(self.frame, font=time_info_font, width=50, height=1, fg="#ff5000")
+
+                text.insert("0.0", str(info))
+                row = time_count + 1
+                column += 3
+
+                text.grid(row=row, column=column, sticky=tk.E)
+                text.config(state=tk.DISABLED)
+
+    def on_config(self, event):
+        """Reset the scroll region to encompass the inner frame"""
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def on_mousewheel(self, event):
+        """Scrolls the canvas using the mouse wheel"""
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def toggle_fullscreen(self):
+        """Toggles fullscreen on and off"""
+        self.fullscreen = not self.fullscreen
+        self.parent.attributes("-fullscreen", self.fullscreen)
+
+    def exit_fullscreen(self):
+        """Exists fullscreen"""
+        self.fullscreen = False
+        self.parent.attributes("-fullscreen", self.fullscreen)
+
+
+def display_times(times):
+    """
+    Setups TimeTable object
+    :param times: list[CubeUtils.Time]
+    """
+    root = tk.Tk()
+    root.config(width=1000, height=1000)
+    root.title("Time Table")
+    time_table = TimeTable(root, times, height=1000, width=1000)
+    time_table.pack(expand=True, fill=tk.BOTH)
+    root.mainloop()
+
+
+def generate_random_time():
+    """
+    Generates a time with a random time attribute and returns it
+    :return: CubeUtils.Time
+    """
+    time = round(random.uniform(0.0, 30.0), 2)
+    scramble = " ".join(CubeUtils.generate_scramble())
+    date = datetime.datetime.now()
+    time = Time(time, scramble, date)
+    return time
+
+
+def generate_random_DNF():
+    """
+    Generates a DNF time with a random time attribute and returns it
+    :return: CubeUtils.Time
+    """
+    time = round(random.uniform(0.0, 30.0), 2)
+    scramble = " ".join(CubeUtils.generate_scramble())
+    date = datetime.datetime.now()
+    time = Time(time, scramble, date, DNF=True)
+
+    return time
+
+
 if __name__ == "__main__":
-    print (" ".join(CubeUtils.generate_scramble()))
+    times = [generate_random_time() for i in range(3)]
+    root = tk.Tk()
+    timetable = TimeTable(root, times)
+    timetable.pack(expand=True, fill=tk.BOTH)
+    root.mainloop()
 
