@@ -52,6 +52,8 @@ class CubeTimer:
         # Create connection to database and create table
         self.conn = sqlite3.connect("Timer\\solves.db")
         self.c = self.conn.cursor()
+        # Un-comment line below when coming back from test.py
+        # self.c.execute("DROP TABLE times")
 
         try:
             self.c.execute("""CREATE TABLE times (
@@ -67,8 +69,6 @@ class CubeTimer:
         # Initialize mixer
         mixer.init()
         mixer.music.load("Assets/beep.wav")
-
-        self.c.execute("DELETE FROM times")
 
         # Get times
         self.c.execute("SELECT time, scramble, date, DNF FROM times")
@@ -291,13 +291,17 @@ class CubeTimer:
 
             else:
                 tk.messagebox.showerror("Non-existant time", f"The time '{time.time}' does not exist")
+                self.TimesListbox.config(state=tk.NORMAL)
                 return
 
             with self.conn:
                 self.c.execute("SELECT oid FROM times")
                 self.c.execute("DELETE FROM times WHERE oid = :oid",
                                {"oid": oid})
-                self.c.execute("UPDATE times SET oid=:oid", {"oid": oid})
+
+                for i in range(len(self.times), -1):
+                    self.c.execute("UPDATE times SET oid=:oid WHERE oid=:oid", {"oid": oid})
+                    oid -= 1
 
             self.insert_times()
 
@@ -309,7 +313,7 @@ class CubeTimer:
         """
         Returns the times time, scramble and date
         :param oid: int
-        :return: list[tuple]
+        :return: List[tuple]
         """
         self.c.execute("SELECT * FROM times WHERE oid=:oid", {"oid": oid})
         return self.c.fetchall()
@@ -317,7 +321,7 @@ class CubeTimer:
     def get_settings(self, cursor) -> list:
         """
         Returns the current user settings
-        :param cursor: conn.cursor()
+        :param cursor: sqlite3.Cursor
         :return: list
         """
         cursor.execute("SELECT * FROM settings")
@@ -540,6 +544,7 @@ class CubeTimer:
             time_info = list(self.get_time(oid))[0]
 
             if not time_info:
+                on_close()
                 tk.messagebox.showerror("Non-existant time", f"The time '{time}' does not exist.'")
                 return
 

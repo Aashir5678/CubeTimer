@@ -253,6 +253,9 @@ class Time:
         :param time: str
         :returns: float
         """
+        if not isinstance(time, str):
+            raise TypeError("time argument must be of type str")
+
         if ":" in time:
             minutes = time.split(":")[0]
             seconds = time.split(":")[-1]
@@ -275,6 +278,9 @@ class Time:
         """
         if not isinstance(seconds, float):
             raise TypeError("seconds argument must be of type float")
+
+        elif seconds <= 59:
+            return
 
         time = str(datetime.timedelta(seconds=seconds))
         time = time[2: -1] + time[-1]
@@ -302,17 +308,10 @@ class Time:
 
         # If time is over 59 seconds
         elif isinstance(time, str):
-            time = time.replace(".", ":")
-            minute, seconds, miliseconds = time.split(":")
+            time = Time.convert_to_seconds(time) + 2
+            time = Time.convert_to_minutes(time)
 
-            if seconds[0] == "0":
-                seconds = seconds[1]
-
-            seconds = int(seconds)
-            seconds += 2
-            seconds = "0" + str(seconds)
-
-            return minute + ":" + str(seconds) + "." + miliseconds
+            return time
 
         else:
             raise Exception("Time argument must be of type str or float.")
@@ -329,12 +328,82 @@ class Time:
         return f"{self.time}, {self.scramble}, {self.date}"
 
 
+class MultiPhaseTime(Time):
+    """Creates a Time object that stores a list of floats"""
+    def __init__(self, times, *args, **kwargs):
+        """
+        :param times: List[float]
+        """
+        super().__init__(sum(times), *args, **kwargs)
+        self.times = times
+
+    def get_times(self):
+        """
+        Returns the times list
+        :return: List[float]
+        """
+        return self.times
+
+    @staticmethod
+    def convert_to_seconds(times):
+        """
+        Converts the sum of the list times to seconds
+        :param times: List[float / str]
+        :return: float
+        """
+
+        # Convert to float list
+        float_times = times.copy()
+        for index in range(len(float_times)):
+            try:
+                float_times[index] = Time.convert_to_seconds(float_times[index])
+
+            except TypeError:
+                pass
+
+        time = sum(float_times)
+        return Time.convert_to_seconds(time)
+
+    @staticmethod
+    def convert_to_minutes(seconds):
+        """
+        Converts the sum of the list times to minutes
+        :param seconds: List[str / float]
+        :return: str
+        """
+
+        # Convert to float list
+        float_times = seconds.copy()
+        for index in range(len(float_times)):
+            try:
+                float_times[index] = Time.convert_to_seconds(float_times[index])
+
+            except TypeError:
+                pass
+
+        # Return sum of list in minutes
+        time = sum(float_times)
+        return Time.convert_to_minutes(time)
+
+    @staticmethod
+    def plus_2(times):
+        """
+        Returns the sum of times list, plus 2 seconds, time can be over 59 seconds
+        :param times: List[float]
+        """
+        time = sum(times)
+        if time > 59:
+            time = Time.convert_to_minutes(time)
+
+        return super().plus_2(time)
+
+
 class TimeTable(tk.Frame):
     """Creates a time table using a tk.Canvas"""
     def __init__(self, parent, times, *args, **kwargs):
         """
         :param parent: tk.Tk()
-        :param times: list[CubeUtils.Time]
+        :param times: List[CubeUtils.Time]
         """
 
         # Initialize super class and define attributes
@@ -411,7 +480,7 @@ class TimeTable(tk.Frame):
 def display_times(times):
     """
     Setups TimeTable object
-    :param times: list[CubeUtils.Time]
+    :param times: List[CubeUtils.Time]
     """
     root = tk.Tk()
     root.config(width=1000, height=1000)
