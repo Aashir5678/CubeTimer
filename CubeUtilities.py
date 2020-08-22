@@ -300,6 +300,7 @@ class Time:
         """
         Returns plus 2 of a time, time can be over 59 seconds
         :param time: float / str
+        :return: float / str
         """
 
         # If time is less than a minute
@@ -335,6 +336,7 @@ class MultiPhaseTime(Time):
         :param times: List[float]
         """
         super().__init__(sum(times), *args, **kwargs)
+
         self.times = times
 
     def get_times(self):
@@ -441,7 +443,12 @@ class TimeTable(tk.Frame):
 
         # Insert times in text widgets
         for time_count, time in enumerate(self.times):
-            time_info = [time_count + 1, time.time, time.scramble, time.date, time.DNF]
+            if time.time <= 59:
+                time_info = [time_count + 1, time.time, time.scramble, time.date, time.DNF]
+
+            else:
+                time_info = [time_count + 1, Time.convert_to_minutes(time.time), time.scramble, time.date, time.DNF]
+
             time_info_font = ("Arial", 15, "bold")
             for column, info in enumerate(time_info):
                 if isinstance(info, int) and not isinstance(info, bool):
@@ -495,7 +502,7 @@ def generate_random_time():
     Generates a time with a random time attribute and returns it
     :return: CubeUtils.Time
     """
-    time = round(random.uniform(0.0, 30.0), 2)
+    time = round(random.uniform(60.0, 120.0), 2)
     scramble = " ".join(CubeUtils.generate_scramble())
     date = datetime.datetime.now()
     time = Time(time, scramble, date)

@@ -489,18 +489,22 @@ class CubeTimer:
                 self.timer_is_running = True
                 self.update_timer(recursive=False)
                 self.display_time = False
-                self.timer_is_running = False
+
+            # if self.multiphase:
+            #     if self.display_time:
+            #         time = self.TimeLabel["text"]
+            #         time = round(float(time) - self.multiphase_times[-1], 2)
+            #
+            #         print (self.TimeLabel["text"])
+            #
+            #     else:
+            #         time = round(t.time() - self.start, 2)
+            #         time = round(time - self.multiphase_times[-1], 2)
+            #
+            #     self.multiphase_times.append(float(time))
 
             if self.multiphase:
-                if self.display_time:
-                    now = float(self.TimeLabel["text"])
-
-                else:
-                    now = round(t.time() - self.start, 2)
-
-                last_time = self.multiphase_times[-1]
-                time = round(now - last_time, 2)
-
+                time = round(self.end - self.start, 2)
                 self.multiphase_times.append(time)
 
             # Change bg
@@ -566,6 +570,13 @@ class CubeTimer:
                     time = Time(time, self.scramble, time_date, DNF=True)
 
             else:
+                # for index in range(len(self.multiphase_times)):
+                #     if index:
+                #         previous_time = self.multiphase_times[index-1]
+                #         current_time = self.multiphase_times[index]
+                #
+                #         self.multiphase_times[index] = round(current_time - previous_time, 2)
+
                 if not self.plus_2 and not self.DNF:
                     time = MultiPhaseTime(self.multiphase_times, self.scramble, time_date)
 
@@ -575,6 +586,8 @@ class CubeTimer:
 
                 else:
                     time = MultiPhaseTime(self.multiphase_times, self.scramble, time_date, DNF=True)
+
+                self.multiphase_count = len(self.multiphase_times) - 1
 
             self.save_time(time)
             self.plus_2 = False
@@ -599,28 +612,11 @@ class CubeTimer:
                 self.SettingsButton.config(bg="light green")
 
             # Add time to multiphase
-            now = None
-            last_time = None
             if self.display_time:
-                if len(self.multiphase_times) == 0:
-                    time = self.TimeLabel["text"]
-
-                else:
-                    now = round(t.time() - self.start, 2)
-                    last_time = self.multiphase_times[-1]
-                    time = round(now - last_time, 2)
+                time = self.TimeLabel["text"]
 
             else:
-                if len(self.multiphase_times) == 0:
-                    time = self.TimeLabel["text"]
-
-                else:
-                    now = round(t.time() - self.start, 2)
-                    last_time = self.multiphase_times[-1]
-                    time = round(now - last_time, 2)
-
-            print("last time: " + str(last_time))
-            print ("now: " + str(now))
+                time = round(t.time() - self.start, 2)
 
             self.multiphase_times.append(float(time))
             self.multiphase_count -= 1
@@ -727,7 +723,11 @@ class CubeTimer:
             times = time.get_times()
             times = times.copy()
             for index in range(len(times)):
-                times[index] = str(times[index])
+                if times[index] <= 59:
+                    times[index] = str(times[index])
+
+                else:
+                    times[index] = Time.convert_to_minutes(times[index])
 
             times = ", ".join(times)
             times = "(" + times + ")"
