@@ -8,7 +8,7 @@ from pyperclip import copy
 from pygame import mixer
 from tkinter import messagebox
 from _tkinter import TclError
-from CubeUtilities import CubeUtils, Time, TimeTable
+from CubeUtilities import CubeUtils, Time, TimeTable, MultiPhaseTime
 from PIL import ImageTk, Image
 from os.path import exists
 from tkinter.filedialog import askopenfilename
@@ -33,11 +33,16 @@ class CubeTimer:
         self.display_time = False
         self.open_display_times = False
         self.DNF = False
+        self.multiphase = False
+        self.multiphase_count = 0  # Need to pass in value one less than the value wanted
+        self.multiphase_times = []
         self.plus_2 = False
         self.scramble = None
         self.Settings = None
+        self.TimeOptions = None
         self.times = []
         self.scramble_len = 25
+        self.puzzle_type = "3x3"
         self.INSPECTION_COUNT = 16
         self.DATE_FORMAT = "%Y-%m-%d-%I:%M %p"
         self.ON_CLOSE = "WM_DELETE_WINDOW"
@@ -53,14 +58,14 @@ class CubeTimer:
         self.conn = sqlite3.connect("Timer\\solves.db")
         self.c = self.conn.cursor()
         # Un-comment line below when coming back from test.py
-        # self.c.execute("DROP TABLE times")
 
         try:
             self.c.execute("""CREATE TABLE times (
                             time float,
                             scramble text,
                             date text,
-                            DNF integer
+                            DNF integer,
+                            multiphase text
                             )""")
 
         except sqlite3.OperationalError:
@@ -71,16 +76,31 @@ class CubeTimer:
         mixer.music.load("Assets/beep.wav")
 
         # Get times
-        self.c.execute("SELECT time, scramble, date, DNF FROM times")
+        self.c.execute("SELECT time, scramble, date, DNF, multiphase FROM times")
 
         for times in self.c.fetchall():
-            time, scramble, date, DNF = times
+            time, scramble, date, DNF, multiphase = times
             date = datetime.datetime.strptime(date, self.DATE_FORMAT)
             if DNF:
-                self.times.append(Time(time, scramble, date, DNF=True))
+                if multiphase:
+                    times = multiphase.split(", ")
+                    self.times.append(MultiPhaseTime(times, scramble, date, DNF=True))
+
+                else:
+                    self.times.append(Time(time, scramble, date, DNF=True))
 
             else:
-                self.times.append(Time(time, scramble, date))
+                if multiphase:
+                    times = multiphase.split(", ")
+
+                    # Convert to float list
+                    for index in range(len(times)):
+                        times[index] = float(times[index])
+
+                    self.times.append(MultiPhaseTime(times, scramble, date))
+
+                else:
+                    self.times.append(Time(time, scramble, date))
 
         frame = tk.Frame(self.parent)
 
@@ -93,8 +113,11 @@ class CubeTimer:
             if settings:
                 self.Inspectionvar.set(settings[0][0])
                 self.Displaytimevar.set(settings[0][1])
-                self.display_time = (True if self.Displaytimevar.get() else False)
+                self.display_time = bool(self.Displaytimevar.get())
                 self.scramble_len = settings[0][2]
+                self.multiphase_count = settings[0][3]
+                if self.multiphase_count:
+                    self.multiphase = True
 
         except sqlite3.OperationalError:
             pass
@@ -201,10 +224,10 @@ class CubeTimer:
         # Bindings
 
         self.parent.bind("t", lambda event: self.display_times())
-        self.parent.bind("e", lambda event: self.export_times())
         self.parent.bind("i", lambda event: self.import_times())
+        self.parent.bind("e", lambda event: self.export_times())
         self.TimesListbox.bind(
-            "<Double-Button-1>", lambda item: self.time_options()
+            "<Double-Button-1>", lambda event: self.time_options()
         )
 
         self.TimesListbox.bind("<Delete>", lambda key: self.delete_time(self.TimesListbox.curselection()[0]
@@ -214,7 +237,7 @@ class CubeTimer:
         self.SettingsButton.bind("<Enter>", lambda event: self.enlarge_settings_button())
         self.SettingsButton.bind("<Leave>", lambda event: self.shrink_settings_button())
         try:
-            self.parent.protocol(self.ON_CLOSE, lambda: self.quit())
+            self.parent.protocol(self.ON_CLOSE, self.quit)
 
         except TclError:
             pass
@@ -251,11 +274,22 @@ class CubeTimer:
     def save_time(self, time):
         """
         Saves the time to the database
-        :param time: CubeUtilities.Time
+        :param time: CubeUtilities.Time / CubeUtilities.MultiPhaseTime
         """
         self.times.append(time)
         with self.conn:
-            self.c.execute("INSERT INTO times VALUES (?, ?, ?, ?)", (time.time, time.scramble, time.date, int(time.DNF)))
+            if isinstance(time, MultiPhaseTime):
+                times = time.get_times()
+                for index in range(len(times)):
+                    times[index] = str(times[index])
+
+                times = ", ".join(times)
+                self.c.execute("INSERT INTO times VALUES (?, ?, ?, ?, ?)",
+                               (time.time, time.scramble, time.date, int(time.DNF), times))
+
+            elif isinstance(time, Time):
+                self.c.execute("INSERT INTO times VALUES (?, ?, ?, ?, ?)",
+                               (time.time, time.scramble, time.date, int(time.DNF), ""))
 
     def delete_time(self, oid, parent=None, confirm=True):
         """
@@ -273,6 +307,16 @@ class CubeTimer:
 
         if delete_time:
             oid += 1
+            if len(self.times) == 1:
+                self.c.execute("DELETE FROM times")
+                self.times.pop(0)
+                self.insert_times()
+                self.update_stats(list(self.TimesListbox.get(0, tk.END)))
+                if parent is not None:
+                    parent.destroy()
+
+                return
+
             time = self.get_time(oid)
 
             if isinstance(time[0][0], str):
@@ -325,16 +369,36 @@ class CubeTimer:
         :return: list
         """
         cursor.execute("SELECT * FROM settings")
-        return cursor.fetchmany(3)
+        return cursor.fetchmany(5)
 
     def get_scramble(self) -> str:
         """
         Generates a scramble of length self.length
         :return: str
         """
-        self.scramble = " ".join(CubeUtils.generate_scramble(self.scramble_len))
+        self.scramble = " ".join(CubeUtils.generate_scramble(length=self.scramble_len, puzzle_type=self.puzzle_type))
 
         return self.scramble
+
+    @staticmethod
+    def get_multiphase_interval(multiphase_times):
+        """
+        Returns multiphase list with correct time intervals
+        :param multiphase_times: List[float]
+        """
+        multiphase_intervals = []
+        for index in range(len(multiphase_times)):
+            if index:
+                # Find the difference between the current time and previous time, and store that in mutliphase_intervals
+                current_time = multiphase_times[index]
+                prev_time = multiphase_times[index - 1]
+
+                multiphase_intervals.append(round(current_time - prev_time, 2))
+
+            else:
+                multiphase_intervals.append(round(multiphase_times[index], 2))
+
+        return multiphase_intervals
 
     def start_timer(self, recursive=False):
         """Starts the timer"""
@@ -356,6 +420,7 @@ class CubeTimer:
 
             # Start Timer
             self.space_held = False
+            self.multiphase_times.clear()
             self.timer_is_running = True
             if self.display_time:
                 self.TimeLabel.config(text="0.00")
@@ -431,8 +496,9 @@ class CubeTimer:
             self.parent.bind("<KeyRelease-space>", lambda event: self.start_timer(recursive=True))
 
     def stop_timer(self):
-        """Stop the timer"""
-        if self.timer_is_running:
+        """Stops the timer"""
+        # Multiphase of 1
+        if self.timer_is_running and (not self.multiphase_count or not self.multiphase):
             # Unbind and stop timer
             self.parent.unbind("<space>")
             self.parent.unbind("<KeyRelease-space>")
@@ -444,7 +510,10 @@ class CubeTimer:
                 self.timer_is_running = True
                 self.update_timer(recursive=False)
                 self.display_time = False
-                self.timer_is_running = False
+
+            if self.multiphase:
+                time = round(self.end - self.start, 2)
+                self.multiphase_times.append(time)
 
             # Change bg
             self.TimeLabel.config(bg="red")
@@ -491,19 +560,37 @@ class CubeTimer:
             now = datetime.datetime.now()
             time_date = datetime.datetime(now.year, now.month, now.day, now.hour, now.minute)
             time = self.TimeLabel["text"]
+            time = round(float(time), 2)
 
-            # If time is greater than 59 seconds
-            if Time.convert_to_seconds(time) != 0.0:
-                time = Time.convert_to_seconds(time)
+            if not self.multiphase:
+                # If time is greater than 59 seconds
+                if Time.convert_to_seconds(time) != 0.0:
+                    time = round(Time.convert_to_seconds(time), 2)
 
-            if not self.plus_2 and not self.DNF:
-                time = Time(float(time), self.scramble, time_date)
+                # If time doesn't have any penalties
+                if not self.plus_2 and not self.DNF:
+                    time = Time(time, self.scramble, time_date)
 
-            elif self.plus_2:
-                time = Time(float(time + 2), self.scramble, time_date)
+                elif self.plus_2:
+                    time = Time(time + 2, self.scramble, time_date)
+
+                else:
+                    time = Time(time, self.scramble, time_date, DNF=True)
 
             else:
-                time = Time(float(time), self.scramble, time_date, DNF=True)
+                self.multiphase_times = CubeTimer.get_multiphase_interval(self.multiphase_times)
+
+                if not self.plus_2 and not self.DNF:
+                    time = MultiPhaseTime(self.multiphase_times, self.scramble, time_date)
+
+                elif self.plus_2:
+                    self.multiphase_times[0] += 2
+                    time = MultiPhaseTime(self.multiphase_times, self.scramble, time_date)
+
+                else:
+                    time = MultiPhaseTime(self.multiphase_times, self.scramble, time_date, DNF=True)
+
+                self.multiphase_count = len(self.multiphase_times) - 1
 
             self.save_time(time)
             self.plus_2 = False
@@ -512,14 +599,48 @@ class CubeTimer:
             # Update stats
             self.update_stats(times)
 
-            # Rebind start timer and space releases
+            # Rebind space key
             self.parent.after(300)
             self.parent.bind(
                 "<space>", lambda event: self.space_hold(),
             )
 
+        # Multiphase more than 1
+        elif self.timer_is_running and (self.multiphase_count and self.multiphase):
+            def change_bg():
+                """Changes the background back to green"""
+                self.parent.config(bg="light green")
+                self.TimeLabel.config(bg="light green")
+                self.AveragesLabel.config(bg="light green")
+                self.SettingsButton.config(bg="light green")
+
+            # Add time to multiphase
+            if self.display_time:
+                time = self.TimeLabel["text"]
+
+            else:
+                time = round(t.time() - self.start, 2)
+
+            self.multiphase_times.append(float(time))
+            self.multiphase_count -= 1
+
+            # Change bg
+            self.parent.config(bg="red")
+            self.TimeLabel.config(bg="red")
+            self.AveragesLabel.config(bg="red")
+            self.SettingsButton.config(bg="red")
+
+            self.parent.after(100, change_bg)
+
     def time_options(self):
         """Opens the time options in a new tkinter.Tk() window"""
+        if self.TimeOptions is not None:
+            try:
+                self.TimeOptions.destroy()
+
+            except TclError:
+                pass
+
         self.TimeOptions = tk.Tk()
         self.TimeOptions.title("Time Options")
         self.TimeOptions.iconbitmap(self.ICON_IMG) # Icon made by Freepik from www.flaticon.com
@@ -537,40 +658,48 @@ class CubeTimer:
             self.TimesListbox.config(state=tk.NORMAL)
             self.TimeOptions.destroy()
             self.parent.focus()
+            self.TimeOptions = None
 
         self.unfocus_times()
 
-        if ":" in str(time):
-            time_info = list(self.get_time(oid))[0]
+        # Construct time object, and get its info
+        time_info = list(self.get_time(oid))[0]
 
-            if not time_info:
-                on_close()
-                tk.messagebox.showerror("Non-existant time", f"The time '{time}' does not exist.'")
-                return
+        if not time_info:
+            on_close()
+            tk.messagebox.showerror("Non-existant time", f"The time '{time}' does not exist.'")
+            return
 
-            time = time_info[0]
-            scramble = time_info[1]
-            date = time_info[2]
-            date = datetime.datetime.strptime(date, self.DATE_FORMAT)
+        time = time_info[0]
+        scramble = time_info[1]
+        date = time_info[2]
+        DNF = time_info[3]
+        multiphase = time_info[4]
+        date = datetime.datetime.strptime(date, self.DATE_FORMAT)
 
-            time = Time(float(time), scramble, date)
+        if not multiphase:
+            if DNF:
+                time = Time(float(time), scramble, date, DNF=True)
+
+            else:
+                time = Time(float(time), scramble, date)
 
         else:
-            time_info = list(self.get_time(oid))[0]
+            multiphase = multiphase.split(", ")
 
-            if not time_info:
-                tk.messagebox.showerror("Non-existant time", f"The time '{time}' does not exist.'")
-                return
+            # Convert to float list
+            for index in range(len(multiphase)):
+                multiphase[index] = float(multiphase[index])
 
-            time = time_info[0]
-            scramble = time_info[1]
-            date = time_info[2]
-            date = datetime.datetime.strptime(date, self.DATE_FORMAT)
+            if DNF:
+                time = MultiPhaseTime(multiphase, scramble, date, DNF=True)
 
-            time = Time(float(time), scramble, date)
+            else:
+                time = MultiPhaseTime(multiphase, scramble, date)
 
         timefont = font.Font(size=15)
 
+        # Widgets
         if time.time > 59:
             TimeLabel = tk.Label(self.TimeOptions, text=Time.convert_to_minutes(time.time), font=timefont)
 
@@ -592,6 +721,24 @@ class CubeTimer:
                                          command=lambda: self.delete_time(self.TimesListbox.curselection()[0],
                                                                           parent=self.TimeOptions))
 
+        # If time has a multiphase of 2 or more
+        if isinstance(time, MultiPhaseTime):
+            times = time.get_times()
+            times = times.copy()
+            for index in range(len(times)):
+                if times[index] <= 59:
+                    times[index] = str(times[index])
+
+                else:
+                    times[index] = Time.convert_to_minutes(times[index])
+
+            times = ", ".join(times)
+            times = "(" + times + ")"
+            TimesLabel = tk.Label(self.TimeOptions, text=times)
+
+        else:
+            TimesLabel = None
+
         DNFButton = tk.Button(self.TimeOptions, text="DNF")
         Plus2Button = tk.Button(self.TimeOptions, text="+2")
 
@@ -602,13 +749,24 @@ class CubeTimer:
         DNFButton.bind("<Button-1>", lambda event: self.DNF_time(oid, parent=self.TimeOptions))
         Plus2Button.bind("<Button-1>", lambda event: self.plus_2_time(oid, parent=self.TimeOptions))
 
+        # Widget placement
         TimeLabel.grid(row=0, column=1)
-        ScrambleLabel.grid(row=1, column=1)
-        DateLabel.grid(row=2, column=1)
-        DeleteTimeButton.grid(row=3, column=0)
-        if not time.DNF:
-            DNFButton.grid(row=3, column=1)
-        Plus2Button.grid(row=3, column=2)
+        if TimesLabel is not None:
+            TimesLabel.grid(row=1, column=1)
+            ScrambleLabel.grid(row=2, column=1)
+            DateLabel.grid(row=3, column=1)
+            DeleteTimeButton.grid(row=4, column=0)
+            if not time.DNF:
+                DNFButton.grid(row=4, column=1)
+            Plus2Button.grid(row=4, column=2)
+
+        else:
+            ScrambleLabel.grid(row=1, column=1)
+            DateLabel.grid(row=2, column=1)
+            DeleteTimeButton.grid(row=3, column=0)
+            if not time.DNF:
+                DNFButton.grid(row=3, column=1)
+            Plus2Button.grid(row=3, column=2)
 
     def DNF_time(self, oid, parent=None):
         """
@@ -668,12 +826,15 @@ class CubeTimer:
 
         conn = sqlite3.connect("Timer\\settings.db")
         cursor = conn.cursor()
+        cursor.execute("DROP TABLE settings")
 
         try:
             cursor.execute("""CREATE TABLE settings (
                                     inspection integer,
                                     display_time integer,
-                                    scramble_len integer
+                                    scramble_len integer,
+                                    multiphase integer,
+                                    puzzle_type text
                                     )""")
 
         except sqlite3.OperationalError:
@@ -684,7 +845,9 @@ class CubeTimer:
         if self.get_settings(cursor):
             self.Inspectionvar.set(self.get_settings(cursor)[0][0])
             self.Displaytimevar.set(self.get_settings(cursor)[0][1])
+            self.puzzle_type = self.get_settings(cursor)[0][4]
             self.scramble_len = int(self.get_settings(cursor)[0][2])
+            self.multiphase_count = int(self.get_settings(cursor)[0][3])
 
             self.display_time = (True if int(self.get_settings(cursor)[0][1]) else False)
 
@@ -692,14 +855,18 @@ class CubeTimer:
             self.Inspectionvar.set(0)
             self.Displaytimevar.set(1)
             self.display_time = True
+            self.multiphase = False
+            self.multiphase_count = 0
+            self.puzzle_type = "3x3"
             with conn:
                 cursor.execute("DELETE FROM settings")
-                cursor.execute("INSERT INTO settings VALUES (:inspection, :display_time, :scramble_len)",
+                cursor.execute("INSERT INTO settings VALUES (:inspection, :display_time, :scramble_len, :multiphase, :puzzle_type)",
                                {"inspection": self.Inspectionvar.get(), "display_time": self.Displaytimevar.get(),
-                                "scramble_len": self.scramble_len})
+                                "scramble_len": self.scramble_len, "multiphase": self.multiphase_count+1,
+                                "puzzle_type": self.puzzle_type})
 
         # Setting widgets
-        SettingFont = font.Font(size=40, weight="bold")
+        SettingFont = font.Font(font=100, weight="bold")
         SettingsLabel = tk.Label(self.Settings, text="Settings", font=SettingFont)
         self.DisplayTimeCheckbutton = tk.Checkbutton(self.Settings, text="Display time", variable=self.Displaytimevar,
                                                      offvalue=0,
@@ -719,6 +886,12 @@ class CubeTimer:
         ScrambleLabel = tk.Label(self.Settings, text="Scramble length:")
         ScrambleEntry = tk.Entry(self.Settings)
 
+        MultiphaseLabel = tk.Label(self.Settings, text="Multiphase")
+        MultiphaseEntry = tk.Entry(self.Settings)
+
+        PuzzleTypeLabel = tk.Label(self.Settings, text="Puzzle type:")
+        PuzzleTypeEntry = tk.Entry(self.Settings)
+
         ImportTimesButton = tk.Button(self.Settings, text="Import times")
         ExportTimesButton = tk.Button(self.Settings, text="Export times")
         ClearSolvesButton = tk.Button(self.Settings, text="Clear times", command=self.clear_times)
@@ -727,27 +900,42 @@ class CubeTimer:
         GenerateScrambleButton = tk.Button(self.Settings, text="Generate scramble", command=self.insert_scramble)
         ShowKeyBindsButton = tk.Button(self.Settings, text="Show Keybindings", command=CubeTimer.show_keybindings)
 
+        # Insert current settings
         ScrambleEntry.insert(0, self.scramble_len)
+        MultiphaseEntry.insert(0, self.multiphase_count+1)
+        PuzzleTypeEntry.insert(0, self.puzzle_type)
 
         # Bindings
-        ScrambleEntry.bind("<Return>", lambda event: self.change_scramble_len(conn, cursor, ScrambleEntry))
+        ScrambleEntry.bind("<Return>", lambda event: self.change_scramble_len(conn, cursor, ScrambleEntry.get()))
+        MultiphaseEntry.bind("<Return>", lambda event: self.change_multiphase(conn, cursor, MultiphaseEntry.get()))
+        PuzzleTypeEntry.bind("<Return>", lambda event: self.change_puzzle_type(conn, cursor, PuzzleTypeEntry.get()))
+
         CopyTimesButton.bind("<Button-1>", lambda event: self.copy_times(CopyTimesButton))
         ImportTimesButton.bind("<Button-1>", lambda event: self.import_times())
         ExportTimesButton.bind("<Button-1>", lambda event: self.export_times())
         self.InspectionCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor))
         self.DisplayTimeCheckbutton.bind("<Button-1>", lambda event: self.save_setting(conn, cursor, setting="display time"))
-        self.Settings.protocol(self.ON_CLOSE,
-                               lambda: self.change_scramble_len(conn, cursor, ScrambleEntry, quit_window=True))
 
+        self.Settings.protocol(self.ON_CLOSE,
+                               lambda: self.change_scramble_len(conn, cursor, ScrambleEntry.get(), quit_window=True))
+        self.Settings.protocol(self.ON_CLOSE,
+                               lambda: self.change_multiphase(conn, cursor, MultiphaseEntry.get(), quit_window=True))
+
+        self.Settings.protocol(self.ON_CLOSE,
+                               lambda: self.change_puzzle_type(conn, cursor, PuzzleTypeEntry.get(), quit_window=True))
         # Widget placement
         SettingsLabel.pack()
         self.InspectionCheckbutton.pack()
         self.DisplayTimeCheckbutton.pack()
         ScrambleLabel.pack()
         ScrambleEntry.pack()
-        ClearSolvesButton.place(x=260, y=200)
-        CopyTimesButton.place(x=260, y=125)
-        ShowKeyBindsButton.place(x=240, y=160)
+        MultiphaseLabel.pack()
+        MultiphaseEntry.pack()
+        PuzzleTypeLabel.pack()
+        PuzzleTypeEntry.pack()
+        ClearSolvesButton.place(x=260, y=205)
+        CopyTimesButton.place(x=100, y=165)
+        ShowKeyBindsButton.place(x=400, y=160)
         GenerateScrambleButton.place(x=100, y=200)
         DisplayTimesButton.place(x=400, y=200)
         ExportTimesButton.place(x=400, y=125)
@@ -755,23 +943,12 @@ class CubeTimer:
 
     def import_times(self, filename=None):
         """
-        Imports the times in to the current session, the contents of the Text widget or the file
-        must follow the format as followed, brackets aren't required and if times are stored in
-        file, you must separate by a new line
-
-        Text widget:
-        (5.43), 32.43, 23.58, (45.76)
-
-        File:
-        (5.43)
-        43.43
-        (4.43)
-        55.84
-
+        Imports the times in to the current session, every time in the file must be seperated by a space, and brackets
+        are permissable
         :param filename: str
         """
 
-        # Get the contents of Text widget / file
+        # Get the contents of file
 
         imported_times = []
         if filename is None:
@@ -898,16 +1075,98 @@ class CubeTimer:
 
         self.parent.bind("t", lambda event: self.reset_window(time_table))
 
-    def change_scramble_len(self, conn, cursor, entry, quit_window=False):
+    def change_scramble_len(self, conn, cursor, scramble_len, quit_window=False):
         """
-        Gets the int from the entry provided and sets it to the new scramble length
+        Sets the int provided to the new scramble length
         :param conn: sqlite3.connect(db)
         :param cursor: conn.cursor
-        :param entry: tkinter.Entry
+        :param scramble_len: int
         :param quit_window: bool
         """
-        try:
-            if self.scramble_len == int(entry.get()):
+
+        # Convert str to int
+        if isinstance(scramble_len, str):
+            try:
+                scramble_len = int(scramble_len)
+
+            except ValueError:
+                return
+
+        # If scramble length is already equal to value provided
+        if self.scramble_len == scramble_len:
+            if quit_window:
+                try:
+                    self.Settings.destroy()
+                    self.Settings = None
+
+                except TclError:
+                    pass
+
+                finally:
+                    return
+
+        self.scramble_len = scramble_len
+
+        # Generate new scramble and display it
+        self.insert_scramble()
+
+        self.save_setting(conn, cursor, setting="scramble length")
+        if quit_window:
+            conn.close()
+            self.Settings.destroy()
+            self.Settings = None
+
+    def change_multiphase(self, conn, cursor, multiphase, quit_window=False):
+        """
+        Sets the multiphase to the value provided
+        :param conn: sqlite3.Connection
+        :param cursor: sqlite3.Cursor
+        :param multiphase: int
+        :param quit_window: bool
+        """
+
+        # Convert str to int
+        if isinstance(multiphase, str):
+            try:
+                multiphase = int(multiphase)
+
+            except ValueError:
+                return
+
+        multiphase -= 1
+
+        # If multiphase is already equal to value provided
+        if self.multiphase == multiphase:
+            if quit_window:
+                try:
+                    self.Settings.destroy()
+                    self.Settings = None
+
+                except TclError:
+                    pass
+
+                finally:
+                    return
+
+        self.multiphase_count = multiphase
+        self.save_setting(conn, cursor, setting="multiphase")
+
+        if quit_window:
+            conn.close()
+            self.Settings.destroy()
+            self.Settings = None
+
+    def change_puzzle_type(self, conn, cursor, puzzle_type, quit_window=False):
+        """
+        Sets the current puzzle type to the one provided
+        :param conn: sqlite3.Connection
+        :param cursor: sqlite3.Cursor
+        :param puzzle_type: str
+        :param quit_window: bool
+        """
+        if puzzle_type in CubeUtils.PUZZLE_TYPES:
+            # If puzzle type is already equal to the value provided
+            if self.puzzle_type == puzzle_type:
                 if quit_window:
                     try:
                         self.Settings.destroy()
@@ -919,24 +1178,14 @@ class CubeTimer:
                     finally:
                         return
 
-            self.scramble_len = int(entry.get())
+            self.puzzle_type = puzzle_type
+            self.insert_scramble()
+            self.save_setting(conn, cursor, setting="puzzle type")
 
-        except ValueError:
-            return
-
-        else:
-            self.ScrambleText.config(state=tk.NORMAL)
-            self.ScrambleText.delete("0.0", tk.END)
-            self.parent.update()
-            scramble = self.get_scramble()
-            self.ScrambleText.insert("0.0", scramble)
-            self.parent.update()
-            self.ScrambleText.config(state=tk.DISABLED)
-
-        self.save_setting(conn, cursor, setting=entry)
-        if quit_window:
-            conn.close()
-            self.Settings.destroy()
+            if quit_window:
+                conn.close()
+                self.Settings.destroy()
+                self.Settings = None
 
     def copy_times(self, button):
         """
@@ -1044,11 +1293,10 @@ class CubeTimer:
 
     def save_setting(self, conn, cursor, setting="inspection"):
         """
-        Saves the setting, 'setting', by default, saving value of Inspectionvar, if the setting is of instance
-        tkinter.Entry, then save the scramble length, which is fetched by the entry provided
-        :param conn: sqlite3.connect(db)
-        :param cursor: conn.cursor()
-        :param setting: str or tkinter.Entry
+        Saves the setting, 'setting', in a database, by default, saving value of Inspectionvar
+        :param conn: sqlite3.Connection
+        :param cursor: sqlite3.Cursor
+        :param setting: str
         """
         if setting == "inspection":
             if self.Inspectionvar.get():
@@ -1059,7 +1307,9 @@ class CubeTimer:
 
             inspection = self.Inspectionvar.get()
             with conn:
-                cursor.execute("UPDATE settings SET inspection = :inspection WHERE display_time = :display_time", {"inspection": inspection, "display_time": int(self.display_time)})
+                display_time = int(self.display_time)
+                cursor.execute("UPDATE settings SET inspection = :inspection WHERE display_time = :display_time",
+                               {"inspection": inspection, "display_time": display_time})
 
         elif setting == "display time":
             if self.Displaytimevar.get():
@@ -1073,11 +1323,29 @@ class CubeTimer:
             display_time = self.Displaytimevar.get()
 
             with conn:
-                cursor.execute("UPDATE settings SET display_time= :display_time WHERE scramble_len = :length", {"display_time": display_time, "length": self.scramble_len})
+                cursor.execute("UPDATE settings SET display_time= :display_time WHERE scramble_len = :length",
+                               {"display_time": display_time, "length": self.scramble_len})
 
-        elif isinstance(setting, tk.Entry):
+        elif setting == "scramble length":
             with conn:
-                cursor.execute("UPDATE settings SET scramble_len=:length WHERE inspection=:inspection", {"length": self.scramble_len, "inspection": self.Inspectionvar.get()})
+                cursor.execute("UPDATE settings SET scramble_len=:length WHERE inspection=:inspection",
+                               {"length": self.scramble_len, "inspection": self.Inspectionvar.get()})
+
+        elif setting == "multiphase":
+            if not self.multiphase_count:
+                self.multiphase = False
+
+            else:
+                self.multiphase = True
+
+            with conn:
+                cursor.execute("UPDATE settings SET multiphase=:multiphase WHERE scramble_len=:scramble_len",
+                               {"scramble_len": self.scramble_len, "multiphase": self.multiphase_count})
+
+        elif setting == "puzzle type":
+            with conn:
+                cursor.execute("UPDATE settings SET puzzle_type=:puzzle_type WHERE inspection=:inspection",
+                               {"puzzle_type": self.puzzle_type, "inspection": self.Inspectionvar.get()})
 
     def update_timer(self, recursive=True):
         """
@@ -1251,9 +1519,13 @@ class CubeTimer:
     @staticmethod
     def show_keybindings():
         """Shows all the keybindings for the Cube Timer"""
+        binds = (
+            "Key Bindings\ni - Import Times\ne - Export Times\nt - Enter / Exit Time Table\nDel - Deletes highlighted "
+            "time in the list of times\nF11 - Toggle fullscreen\nEscape - Exit fullscreen"
+        )
         tk.messagebox.showinfo(
             "Key bindings",
-            "Key Bindings\ni - Import Times\ne - Export Times\nt - Enter / Exit Time Table\nDel - Deletes highlighted time in the list of times\nF11 - Toggle fullscreen\nEscape - Exit fullscreen"
+            binds
         )
 
     def quit(self):

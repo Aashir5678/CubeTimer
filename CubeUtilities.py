@@ -7,42 +7,66 @@ class CubeUtils:
     """Contains essential methods for a cube timer"""
     # Class variables
     LETTERS = ["R", "U", "L", "D", "F", "B"]
+    WIDE_LETTERS = list(move.lower() for move in LETTERS)
+    PUZZLE_TYPES = ["2x2", "3x3", "4x4", "5x5", "6x6", "7x7", "8x8", "9x9"]
     SCRAMBLE_LEN = 23
     QUALIFIERS = ["'", "2"]
     scramble = []
 
     @classmethod
-    def generate_scramble(cls, length=23) -> list:
+    def generate_scramble(cls, length=23, puzzle_type="3x3") -> list:
         """
-        Returns a randomly generated scramble
-        :param int length: length of scramble
+        Returns a randomly generated scramble with the length provided, default puzzle type is 3x3
+        :param length: int
+        :param puzzle_type: str
         :returns: list
         """
-        # Making scramble list and setting scramble length
         cls.SCRAMBLE_LEN = length
         scramble = []
 
         for letter_index in range(cls.SCRAMBLE_LEN):
             # Generate a random letter
-            letter = random.choice(cls.LETTERS)
+
+            if puzzle_type != "3x3" and puzzle_type != "2x2":
+                # One in four chance of getting wide move
+
+                wide_move = random.choice([False, False, False, True])
+
+                if wide_move:
+                    letter = random.choice(cls.WIDE_LETTERS)
+
+                else:
+                    letter = random.choice(cls.LETTERS)
+
+            else:
+                letter = random.choice(cls.LETTERS)
+
             if letter_index >= 2:
                 if (
-                    scramble[letter_index - 2].replace("'", "").replace("2", "")
-                    == letter
+                        scramble[letter_index - 2].replace("'", "").replace("2", "")
+                        == letter
                 ):
                     # Make a copy of list without duplicate move and chose letter from that list
-                    letters = cls.LETTERS.copy()
+                    if puzzle_type != "3x3" and puzzle_type != "2x2":
+                        letters = cls.LETTERS.copy() + cls.WIDE_LETTERS.copy()
+
+                    else:
+                        letters = cls.LETTERS.copy()
 
                     letters.remove(letter)
 
                     letter = random.choice(letters)
 
                 if (
-                    scramble[letter_index - 1].replace("'", "").replace("2", "")
-                    == letter
+                        scramble[letter_index - 1].replace("'", "").replace("2", "")
+                        == letter
                 ):
                     # Make a copy of list without duplicate move and chose letter from that list
-                    letters = cls.LETTERS.copy()
+                    if puzzle_type != "3x3" and puzzle_type != "2x2":
+                        letters = cls.LETTERS.copy() + cls.WIDE_LETTERS.copy()
+
+                    else:
+                        letters = cls.LETTERS.copy()
 
                     letters.remove(letter)
 
@@ -52,11 +76,15 @@ class CubeUtils:
                 # Check if previous move is the same as the current move
 
                 if (
-                    scramble[letter_index - 1].replace("'", "").replace("2", "")
-                    == letter
+                        scramble[letter_index - 1].replace("'", "").replace("2", "")
+                        == letter
                 ):
                     # Make a copy of list without duplicate move and chose letter from that list
-                    letters = cls.LETTERS.copy()
+                    if puzzle_type != "3x3" and puzzle_type != "2x2":
+                        letters = cls.LETTERS.copy() + cls.WIDE_LETTERS.copy()
+
+                    else:
+                        letters = cls.LETTERS.copy()
 
                     letters.remove(letter)
 
@@ -335,7 +363,7 @@ class MultiPhaseTime(Time):
         """
         :param times: List[float]
         """
-        super().__init__(sum(times), *args, **kwargs)
+        super().__init__(round(sum(times), 2), *args, **kwargs)
 
         self.times = times
 
@@ -508,7 +536,6 @@ def generate_random_time():
     time = Time(time, scramble, date)
     return time
 
-
 def generate_random_DNF():
     """
     Generates a DNF time with a random time attribute and returns it
@@ -523,9 +550,5 @@ def generate_random_DNF():
 
 
 if __name__ == "__main__":
-    times = [generate_random_time() for i in range(3)]
-    root = tk.Tk()
-    timetable = TimeTable(root, times)
-    timetable.pack(expand=True, fill=tk.BOTH)
-    root.mainloop()
+    print (" ".join(CubeUtils.generate_scramble()))
 
