@@ -5,3 +5,4 @@ A Rubik's cube timer made with Tkinter in Python
 ```bash
 pip install CubeTimer
 ```
+# Description
