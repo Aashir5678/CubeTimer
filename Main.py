@@ -8,7 +8,7 @@ from pyperclip import copy
 from pygame import mixer
 from tkinter import messagebox
 from _tkinter import TclError
-from CubeUtilities import CubeUtils, Time, TimeTable, MultiPhaseTime
+from CubeUtilities import CubeUtils, Time, TimeTable, MultiPhaseTime, generate_random_time
 from PIL import ImageTk, Image
 from os.path import exists
 from tkinter.filedialog import askopenfilename
@@ -57,7 +57,6 @@ class CubeTimer:
         # Create connection to database and create table
         self.conn = sqlite3.connect("Timer\\solves.db")
         self.c = self.conn.cursor()
-        # Un-comment line below when coming back from test.py
 
         try:
             self.c.execute("""CREATE TABLE times (
@@ -127,12 +126,8 @@ class CubeTimer:
 
         # Setup Listbox
         self.TimesScrollbar = tk.Scrollbar(self.parent)
-        if len(self.times) == 0:
-            self.TimesListbox = tk.Listbox(self.parent, height=10)
-
-        else:
-            self.TimesListbox = tk.Listbox(self.parent, height=len(self.times))
-            self.insert_times()
+        self.TimesListbox = tk.Listbox(self.parent, height=60)
+        self.insert_times()
 
         self.TimesListbox.config(width=10)
 
@@ -263,11 +258,9 @@ class CubeTimer:
         self.parent.rowconfigure(0, weight=1)
 
         self.TimesListbox.grid(row=0, column=1, sticky=tk.N + tk.S)
-        if len(self.times) >= 58:
-            self.TimesScrollbar.grid(row=0, column=2, sticky=tk.N + tk.S)
+        if len(self.times) >= 60:
+            self.TimesScrollbar.grid(row=0, column=2, sticky=tk.N+tk.S)
 
-        else:
-            self.TimesListbox.grid(row=0, column=1, sticky=tk.N + tk.E)
         self.parent.columnconfigure(25)
         self.parent.rowconfigure(25)
 
@@ -548,11 +541,8 @@ class CubeTimer:
             else:
                 self.TimesListbox.insert(tk.END, "DNF")
 
-            if len(self.times) >= 58:
-                self.TimesScrollbar.grid(row=0, column=2, sticky=tk.N + tk.S)
-
-            else:
-                self.TimesListbox.grid(row=0, column=1, sticky=tk.N + tk.E)
+            if len(self.times) >= 60:
+                self.TimesScrollbar.grid(row=0, column=2, sticky=tk.N+tk.S)
 
             times = list(self.TimesListbox.get(0, tk.END))
 
@@ -826,7 +816,6 @@ class CubeTimer:
 
         conn = sqlite3.connect("Timer\\settings.db")
         cursor = conn.cursor()
-        cursor.execute("DROP TABLE settings")
 
         try:
             cursor.execute("""CREATE TABLE settings (
@@ -1481,12 +1470,12 @@ class CubeTimer:
         self.TimesListbox.config(state=tk.NORMAL)
         self.TimesListbox.delete(0, tk.END)
 
-        if len(self.times) >= 5:
+        if len(self.times) >= 60:
             self.TimesListbox.config(height=len(self.times), yscrollcommand=self.TimesScrollbar.set)
             self.TimesScrollbar.config(command=self.TimesListbox.yview())
 
         else:
-            self.TimesListbox.config(height=5)
+            self.TimesListbox.config(height=60)
 
         for time in self.times:
             if not time.DNF:
@@ -1546,11 +1535,7 @@ class CubeTimer:
         self.parent.quit()
 
 
-def main():
+if __name__ == "__main__":
     root = tk.Tk()
     app = CubeTimer(root)
     root.mainloop()
-
-
-if __name__ == "__main__":
-    main()

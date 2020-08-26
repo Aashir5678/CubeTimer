@@ -281,10 +281,8 @@ class Time:
         :param time: str
         :returns: float
         """
-        if not isinstance(time, str):
-            raise TypeError("time argument must be of type str")
 
-        if ":" in time:
+        if isinstance(time, str) and ":" in time:
             minutes = time.split(":")[0]
             seconds = time.split(":")[-1]
             if seconds[0] == "0":
@@ -530,7 +528,7 @@ def generate_random_time():
     Generates a time with a random time attribute and returns it
     :return: CubeUtils.Time
     """
-    time = round(random.uniform(60.0, 120.0), 2)
+    time = round(random.uniform(0.1, 30.0), 2)
     scramble = " ".join(CubeUtils.generate_scramble())
     date = datetime.datetime.now()
     time = Time(time, scramble, date)
