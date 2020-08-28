@@ -16,6 +16,11 @@ cube_timer = CubeTimer(root)
 root.mainloop()
 ```
 
+### Keybinds
+- e - Export times
+- i - Import times
+- Space - Start / Stop Timer
+- t - Display times in a Time Table
 
 
 
