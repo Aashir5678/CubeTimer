@@ -21,7 +21,7 @@ If you need to change anything about your timer, then you can change it in the s
 
 
 ### Time Table
-You can acess your times in a table by pressing t, or by going to settings and pressing the **View times in table** button, here you can view all of your recorded times in a table which displays the times scramble, date and whether or not it is a DNF.
+You can access your times in a table by pressing t, or by going to settings and pressing the **View times in table** button, here you can view all of your recorded times in a table which displays the times scramble, date and whether or not it is a DNF.
 
 ![Time Table](/Screenshots/TimeTable.png)
 
