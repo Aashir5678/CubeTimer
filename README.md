@@ -15,6 +15,11 @@ root = tk.Tk()
 cube_timer = CubeTimer(root)
 root.mainloop()
 ```
+
+## Settings
+If you need to change anything about your timer, then you can change it in the settings window, to enter settings, click the gear in the top left
+
+
 ### Time Table
 You can acess your times in a table by pressing t, or by going to settings and pressing the **View times in table** button, here you can view all of your recorded times in a table which displays the times scramble, date and whether or not it is a DNF.
 
