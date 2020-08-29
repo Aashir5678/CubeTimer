@@ -27,10 +27,13 @@ You can access your times in a table by pressing t, or by going to settings and 
 
 ## Export times
 Lets say you want to write your times in to a text file, how can you do that ? Well, you can export your times in to another file by pressing e or be pressing the **Export times** button in settings,
-once you do, select a *text file* to export your times to
+once you do, select a **text file** to export your times to
 
 ![Export times](/Screenshots/ExportTimesCropped.png)
 ## Import times
+But what if you want to import times from a text file in to your CubeTimer ? You can press i or you can go to settings and press **Import times**, then, select a text file to import times from, if this file was written manually, and not exported, then write the text file in the format of the image above. An example of a time is seen here
+
+**10.45, F L B F2 R D' L B F' R2 D L2 R B L D2 U2 B' F U2 L2 B F', 2020-08-29-7:43 PM**
 
 ### Keybinds
 - e - Export times
