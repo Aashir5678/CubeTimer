@@ -25,6 +25,13 @@ You can access your times in a table by pressing t, or by going to settings and 
 
 ![Time Table](/Screenshots/TimeTable.png)
 
+## Export times
+Lets say you want to write your times in to a text file, how can you do that ? Well, you can export your times in to another file by pressing e or be pressing the **Export times** button in settings,
+once you do, select a *text file* to export your times to
+
+![Export times](/Screenshots/ExportTimes.png)
+## Import times
+
 ### Keybinds
 - e - Export times
 - i - Import times
