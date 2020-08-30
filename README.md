@@ -51,6 +51,7 @@ But, what exactly are penalties ? Penalties happen if your solve wasn't done pro
 - t - Display times in a Time Table
 - F11 - Toggle fullscreen
 - Escape - Exits fullscreen
+- Delete - Deletes the selected time in the listbox 
 
 
 
