@@ -41,7 +41,7 @@ Every line should represent a new time in the file. If the time is a DNF, you ha
 
 This feature will be helpful for people who want to change the time a solve was recorded, or for people who want to un-DNF a solve.
 ### Inspection
-If you want to have WCA inspection enabled or disabled, go to settings, and you'll see a checkbutton, if its checked, then inspection is on, if not then it isn't. WCA inspection lasts 15 seconds, so you have 15 seconds to look at your scrambled cube. If you exceed 15 seconds, then you can get a plus 2 or even a DNF, which are both penalties
+If you want to have WCA inspection enabled or disabled, go to settings, and you'll see a check button, if it's checked, then inspection is on, if not then it isn't. WCA inspection lasts 15 seconds, so you have 15 seconds to look at your scrambled cube. If you exceed 15 seconds, then you can get a plus 2 or even a DNF, which are both penalties
 
 ### Penalties
 But, what exactly are penalties ? Penalties happen if your solve wasn't done properly, like for example, if you are one turn away from solving the cube, but you stopped the timer before you solved it, then its a plus 2, but if it was more than 1 turn away from being solved and you stopped the timer, it's a DNF. Plus 2 is self explanitory, it adds two seconds to your time, DNF stands for Did Not Finish, it's the worst possible time you can get, if you have 2 DNF's in one session, the average is DNF. You can DNF / plus 2 a time, by clicking on it in the listbox with all your times, then select the desired penalty. Your time will be automatically DNF'd / plus 2'd if your inspection exceeds 15 seconds.
@@ -50,7 +50,7 @@ But, what exactly are penalties ? Penalties happen if your solve wasn't done pro
 If you need to modify / delete a time, or view a times information, you can enter its options. To do so, you can double click the time, in the times listbox.
 
 ### Delete time
-If you wish to delete a time, then you can double click it to enter its options, then click the button that says **Delete time**. You can also select the time in the listbox and press the Delete key.
+If you wish to delete a time, then you can double-click it to enter its options, then click the button that says **Delete time**. You can also select the time in the listbox and press the Delete key.
 
 ### Display time
 If you don't want to see your time while solving, you can have it so that it only displays your time when you stop the timer. To do so, go to settings and un-check the display times checkbutton. Instead of displaying your time, it'll show "..." while you are solving.
