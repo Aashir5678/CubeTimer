@@ -1,21 +1,18 @@
 """
 CubeTimer
-
 Copyright 2020 Aashir Alam
-
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
-
 
 # Imports
 import sqlite3
 import datetime
+import csv
 import time as t
 import tkinter as tk
+from webbrowser import open_new
 import tkinter.font as font
 from pyperclip import copy
 from pygame import mixer
@@ -59,6 +56,15 @@ class CubeTimer:
         self.INSPECTION_COUNT = 16
         self.DATE_FORMAT = "%Y-%m-%d-%I:%M %p"
         self.ON_CLOSE = "WM_DELETE_WINDOW"
+        self.LICENSE = """Copyright 2020 Aashir Alam
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+        """
+
         self.best_time = 0
         self.worst_time = 0
         self.start = 0
@@ -205,7 +211,7 @@ class CubeTimer:
         self.averagefont = font.Font(size=15, weight="bold")
 
         # Images
-        gear_image = Image.open("Assets\gear.png") # Icon made by Pixel perfect from www.flaticon.com
+        gear_image = Image.open("Assets/gear.png") # Icon made by Pixel perfect from www.flaticon.com
         gear_image = ImageTk.PhotoImage(gear_image)
 
         # Tkinter widgets
@@ -314,8 +320,15 @@ class CubeTimer:
         if delete_time:
             oid += 1
             if len(self.times) == 1:
-                self.c.execute("DELETE FROM times")
-                self.times.pop(0)
+                self.c.execute("DROP TABLE times")
+                self.c.execute("""CREATE TABLE times (
+                                            time float,
+                                            scramble text,
+                                            date text,
+                                            DNF integer,
+                                            multiphase text
+                                            )""")
+                self.times.pop()
                 self.insert_times()
                 self.update_stats(list(self.TimesListbox.get(0, tk.END)))
                 if parent is not None:
@@ -644,7 +657,7 @@ class CubeTimer:
             except TclError:
                 pass
 
-        self.TimeOptions = tk.Tk()
+        self.TimeOptions = tk.Toplevel()
         self.TimeOptions.title("Time Options")
         self.TimeOptions.iconbitmap(self.ICON_IMG) # Icon made by Freepik from www.flaticon.com
 
@@ -674,6 +687,7 @@ class CubeTimer:
             return
 
         time = time_info[0]
+        self.TimeOptions.title(time)
         scramble = time_info[1]
         date = time_info[2]
         DNF = time_info[3]
@@ -819,7 +833,7 @@ class CubeTimer:
         if self.Settings is not None:
             self.Settings.destroy()
 
-        self.Settings = tk.Tk()
+        self.Settings = tk.Toplevel()
         self.Settings.geometry("600x240")
         self.Settings.iconbitmap(self.ICON_IMG)
         self.Settings.resizable(False, False)
@@ -897,6 +911,7 @@ class CubeTimer:
         ImportTimesButton = tk.Button(self.Settings, text="Import times")
         ExportTimesButton = tk.Button(self.Settings, text="Export times")
         ClearSolvesButton = tk.Button(self.Settings, text="Clear times", command=self.clear_times)
+        CreditsButton = tk.Button(self.Settings, text="Credits", command=self.display_credits)
         CopyTimesButton = tk.Button(self.Settings, text="Copy times")
         DisplayTimesButton = tk.Button(self.Settings, text="View times in table", command=self.display_times)
         GenerateScrambleButton = tk.Button(self.Settings, text="Generate scramble", command=self.insert_scramble)
@@ -935,7 +950,8 @@ class CubeTimer:
         MultiphaseEntry.pack()
         PuzzleTypeLabel.pack()
         PuzzleTypeEntry.pack()
-        ClearSolvesButton.place(x=260, y=205)
+        ClearSolvesButton.place(x=230, y=205)
+        CreditsButton.place(x=315, y=205)
         CopyTimesButton.place(x=100, y=165)
         ShowKeyBindsButton.place(x=400, y=160)
         GenerateScrambleButton.place(x=100, y=200)
@@ -945,11 +961,9 @@ class CubeTimer:
 
     def import_times(self, filename=None):
         """
-        Imports the times in to the current session, every time in the file must be seperated by a space, and brackets
-        are permissable
+        Imports the times in to the current session. The file must be a csv file
         :param filename: str
         """
-
         # Get the contents of file
 
         imported_times = []
@@ -1529,6 +1543,30 @@ class CubeTimer:
             "Key bindings",
             binds
         )
+
+    def display_credits(self):
+        """Displays the credits"""
+        Credits = tk.Toplevel()
+        Credits.iconbitmap(self.ICON_IMG)
+        Credits.resizable(False, False)
+
+        MainIconLabel = tk.Label(Credits,
+                                 text="CubeTimer / Time options / Credits icon - Made by Freepik from www.flaticon.com",
+                                 font=("Arial", 10, "bold"))
+
+        SettingsLabel = tk.Label(Credits, text="Settings gear icon - Made by Pixel perfect from www.flaticon.com",
+                                 font=("Arial", 10, "bold"))
+
+        LicenseLabel = tk.Label(Credits, text="MIT",
+                                font=("Comic Sans", 11, "normal"),
+                                cursor="hand2",
+                                fg="blue")
+
+        LicenseLabel.bind_all("<Button>", lambda event: open_new("https://choosealicense.com/licenses/mit/"))
+
+        MainIconLabel.grid(row=0, column=1)
+        SettingsLabel.grid(row=1, column=1)
+        LicenseLabel.grid(row=2, column=1)
 
     def quit(self):
         """Quits the window and any other opened windows"""

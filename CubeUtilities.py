@@ -1,12 +1,8 @@
 """
 CubeTimer
-
 Copyright 2020 Aashir Alam
-
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
@@ -262,6 +258,7 @@ class CubeUtils:
 
 class Time:
     """Creates a time object that stores its time, scramble, date and whether or not it is a DNF"""
+
     def __init__(self, time, scramble, date, DNF=False):
         """
         :param time: float
@@ -369,6 +366,7 @@ class Time:
 
 class MultiPhaseTime(Time):
     """Creates a Time object that stores a list of floats"""
+
     def __init__(self, times, *args, **kwargs):
         """
         :param times: List[float]
@@ -440,6 +438,7 @@ class MultiPhaseTime(Time):
 
 class TimeTable(tk.Frame):
     """Creates a time table using a tk.Canvas"""
+
     def __init__(self, parent, times, *args, **kwargs):
         """
         :param parent: tk.Tk()
@@ -546,6 +545,7 @@ def generate_random_time():
     time = Time(time, scramble, date)
     return time
 
+
 def generate_random_DNF():
     """
     Generates a DNF time with a random time attribute and returns it
@@ -560,5 +560,5 @@ def generate_random_DNF():
 
 
 if __name__ == "__main__":
-    print (" ".join(CubeUtils.generate_scramble()))
-
+    print(generate_random_time().date)
+    print(" ".join(CubeUtils.generate_scramble()))
