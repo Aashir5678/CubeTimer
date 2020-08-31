@@ -80,6 +80,10 @@ If you ever want to time each part of your solve, then you can change your solve
 - Escape - Exits fullscreen
 - Delete - Deletes the selected time in the listbox 
 
+## Contributing
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+Please make sure to update tests as appropriate.
 ## Credits
 - CubeTimer / Time options icon - Made by Freepik from www.flaticon.com
 - Settings gear icon - Made by Pixel perfect from www.flaticon.com
