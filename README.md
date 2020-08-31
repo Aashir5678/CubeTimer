@@ -69,7 +69,7 @@ Copying your times to your clipboard is easy, just go to settings, and click the
 ## Mulitphase
 If you ever want to time each part of your solve, then you can change your solve multiphase, for example, if your solving method is CFOP, then you would set your multiphase to 4. To change your multiphase, go to settings and change the entry under the label that says "Multiphase". When you are doing a solve and you are done a step of your solving method, then press the space bar. If you go to this multiphase time's options, then you can see the time it took you to do each step of your solve:
 
-![Multiphase time](/Screenshots/MultihphaseTime.png)
+![Multiphase time](/Screenshots/MultiphaseTime.png)
 
 ## Keybinds
 - e - Export times
