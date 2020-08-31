@@ -81,8 +81,6 @@ If you ever want to time each part of your solve, then you can change your solve
 - Delete - Deletes the selected time in the listbox 
 
 ## Credits
-I didn't make any of these icons, here are the people who did:
-
 - CubeTimer / Time options icon - Made by Freepik from www.flaticon.com
 - Settings gear icon - Made by Pixel perfect from www.flaticon.com
 ## License
