@@ -1500,7 +1500,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         if len(self.times) >= 60:
             self.TimesListbox.config(height=len(self.times), yscrollcommand=self.TimesScrollbar.set)
-            self.TimesScrollbar.config(command=self.TimesListbox.yview())
+            self.TimesScrollbar.config(command=self.TimesListbox.yview)
 
         else:
             self.TimesListbox.config(height=60)
