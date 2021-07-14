@@ -1013,6 +1013,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         # Insert times in to TimesListbox
         self.insert_times()
+        self.update_stats(list(self.TimesListbox.get(0, tk.END)))
 
     def export_times(self, filename=None):
         """
