@@ -9,7 +9,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 # Imports
 import sqlite3
 import datetime
-import csv
 import time as t
 import tkinter as tk
 from webbrowser import open_new
@@ -961,7 +960,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     def import_times(self, filename=None):
         """
-        Imports the times in to the current session. The file must be a csv file
+        Imports the times in to the current session.
         :param filename: str
         """
         # Get the contents of file
